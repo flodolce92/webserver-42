@@ -87,13 +87,17 @@ int main()
 		// 8. Construct HTTP response
 		std::string request_str(buffer);
 		std::cout << "\n" << "request: " << request_str << "\n" << "\n";
-		if (request_str.substr(0, 3) == "GET")
+		if (request_str.substr(0, 3) == "GET" and request_str[4] != ' ')
 		{
 			Response response = Response(new_socket, 201, "index.html");
 			response.readFile();
 		}
+		else if (request_str.substr(0, 4) == "POST" and request_str[5] != ' ')
+			std::cout << "POST" << "\n";
+		else if (request_str.substr(0, 6) == "DELETE" and request_str[7] != ' ')
+			std::cout << "DELETE" << "\n";
 		else
-			std::cerr << "Only the Get is working" << "\n";
+			std::cout << "not support" << "\n";
 
 		// 10. Close the client socket
 		close(new_socket);
