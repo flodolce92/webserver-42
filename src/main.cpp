@@ -14,6 +14,7 @@ void error_exit(const char* msg)
 	exit(EXIT_FAILURE);
 }
 
+// Helper function to close the server smoothly
 void handle_sigint(int signum)
 {
 	const char msg[] = "\nShutting down server..\n";
@@ -84,22 +85,41 @@ int main()
 		}
 		buffer[bytes_read] = '\0';
 
-		// 8. Construct HTTP response
 		std::string request_str(buffer);
-		std::cout << "\n" << "request: " << request_str << "\n" << "\n";
-		if (request_str.substr(0, 3) == "GET" and request_str[4] != ' ')
+		std::string cleanRequest = request_str.substr(0, request_str.find("\n"));
+		std::cout << cleanRequest << "\n";
+
+		size_t pos = 0;
+		std::string sub;
+		std::vector<std::string> vectorRequest;
+
+		while (pos != std::string::npos)
+		{
+			pos = cleanRequest.find('/');
+			sub = cleanRequest.substr(0, pos);
+			vectorRequest.push_back(sub);
+			cleanRequest.erase(0, pos + 1);
+		}
+
+		std::vector<std::string>::const_iterator const_it = vectorRequest.begin();
+		if (*const_it == "GET " and request_str[4] != ' ')
 		{
 			Response response = Response(new_socket, 201, "index.html");
 			response.readFile();
 		}
-		else if (request_str.substr(0, 4) == "POST" and request_str[5] != ' ')
+		else if (*const_it == "POST " and request_str[5] != ' ')
+		{
 			std::cout << "POST" << "\n";
-		else if (request_str.substr(0, 6) == "DELETE" and request_str[7] != ' ')
+		}
+		else if (*const_it == "DELETE " and request_str[7] != ' ')
+		{
 			std::cout << "DELETE" << "\n";
+		}
 		else
+		{
 			std::cout << "not support" << "\n";
+		}
 
-		// 10. Close the client socket
 		close(new_socket);
 		std::cout << "Client socket closed." << "\n";
 
