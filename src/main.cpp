@@ -1,6 +1,10 @@
-#include <cstdlib>
+#include <Server.hpp>
 
-int main(void)
+int main()
 {
-	return (EXIT_SUCCESS);
+	Server myServer = Server(8080);
+	myServer.initialize();
+	myServer.run();
+
+	return 0;
 }
