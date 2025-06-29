@@ -13,7 +13,7 @@ void error_exit(const char* msg)
 	std::cerr << (msg) << "\n";
 	exit(EXIT_FAILURE);
 }
-// test change on git 
+// test change on git 2.0pt
 // Helper function to close the server smoothly
 void handle_sigint(int signum)
 {
