@@ -60,6 +60,7 @@ void Request::parseFirstLine()
 	else
 		_isValid = true;
 
+	_path = _uri;
 	size_t queryPos = _uri.find('?');
 	if (queryPos != std::string::npos)
 	{
@@ -155,25 +156,26 @@ std::vector<std::string> Request::getHeaderValues(const std::string &headerName)
 	return values;
 }
 
-std::string Request::toString() const {
-    std::ostringstream oss;
-    
-    // Request line
-    oss << _method << " " << _uri << " " << _version << "\r\n";
-    
-    // Headers
-    for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); 
-         it != _headers.end(); ++it) {
-        oss << it->first << ": " << it->second << "\r\n";
-    }
-    
-    // Empty line separating headers from body
-    oss << "\r\n";
-    
-    // Body (if present)
-    if (!_body.empty()) {
-        oss << _body;
-    }
-    
-    return oss.str();
+std::string Request::toString() const
+{
+	std::ostringstream oss;
+
+	// Request line
+	oss << _method << " " << _uri << " " << _version << "\r\n";
+
+	// Headers
+	for (std::map<std::string, std::string>::const_iterator it = _headers.begin();
+		 it != _headers.end(); ++it)
+	{
+		oss << it->first << ": " << it->second << "\r\n";
+	}
+
+	// Empty line separating headers from body
+	oss << "\r\n";
+
+	// Body (if present)
+	if (!_body.empty())
+		oss << _body;
+
+	return oss.str();
 }
