@@ -1,10 +1,10 @@
 #include <Server.hpp>
 
-int main()
+int main(void)
 {
-	Server myServer = Server(8080);
-	myServer.initialize();
-	myServer.run();
+	Server sv = Server(8080);
+	sv.initialize();
+	sv.run();
 
 	return 0;
 }
