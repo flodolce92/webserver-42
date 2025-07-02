@@ -59,6 +59,13 @@ void Request::parseFirstLine()
 	}
 	else
 		_isValid = true;
+
+	size_t queryPos = _uri.find('?');
+	if (queryPos != std::string::npos)
+	{
+		_path = _uri.substr(0, queryPos);
+		_queryString = _uri.substr(queryPos + 1);
+	}
 }
 
 void Request::parseHeaders()
@@ -118,6 +125,8 @@ void Request::parseBody()
 // Getters
 const std::string &Request::getMethod() const { return _method; }
 const std::string &Request::getUri() const { return _uri; }
+const std::string &Request::getPath() const { return _path; }
+const std::string &Request::getQueryString() const { return _queryString; }
 const std::string &Request::getVersion() const { return _version; }
 const std::map<std::string, std::string> &Request::getHeaders() const { return _headers; }
 const std::string &Request::getBody() const { return _body; }

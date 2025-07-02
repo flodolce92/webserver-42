@@ -13,6 +13,8 @@ private:
 	std::istringstream _iss;
 	std::string _method;
 	std::string _uri;
+	std::string _path;
+	std::string _queryString;
 	std::string _version;
 	std::map<std::string, std::string> _headers;
 	std::string _body;
@@ -35,6 +37,8 @@ public:
 	// Getters
 	const std::string &getMethod() const;
 	const std::string &getUri() const;
+	const std::string &getPath() const;
+	const std::string &getQueryString() const;
 	const std::string &getVersion() const;
 	const std::map<std::string, std::string> &getHeaders() const;
 	const std::string &getBody() const;
