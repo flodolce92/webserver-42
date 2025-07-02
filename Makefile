@@ -1,5 +1,5 @@
 NAME = webserv
-SRC = src/Buffer.cpp src/main.cpp
+SRC = src/Server.cpp src/Buffer.cpp src/ClientConnection.cpp src/main.cpp
 OBJ = $(SRC:.cpp=.o)
 CC = c++
 CFLAGS = -Wall -Wextra -Werror -std=c++98 -g3

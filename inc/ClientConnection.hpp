@@ -1,9 +1,10 @@
 #ifndef CLIENT_CONNECTION_HPP
-# define CLIENT_CONNECTION_HPP
+#define CLIENT_CONNECTION_HPP
 
 #include <string>
 
-enum ConnectionState {
+enum ConnectionState
+{
 	CONN_READING_REQUEST,
 	CONN_PROCESSING_REQUEST,
 	CONN_WRITING_RESPONSE,
@@ -12,81 +13,82 @@ enum ConnectionState {
 	CONN_ERROR
 };
 
-class ClientConnection {
-	private:
-		int _fd;
-		ConnectionState _state;
-		time_t _lastActivity;
-		time_t _createdAt;
+class ClientConnection
+{
+private:
+	int _fd;
+	ConnectionState _state;
+	time_t _lastActivity;
+	time_t _createdAt;
 
-		// Buffers
-		std::string _readBuffer;
-		std::string _writeBuffer;
-		size_t _writeOffset;
+	// Buffers
+	std::string _readBuffer;
+	std::string _writeBuffer;
+	size_t _writeOffset;
 
-		// HTTP Parsing State
-		bool _headersParsed;
-		size_t _contentLength;
-		bool _hasContentLength;
-		bool _isChunked;
+	// HTTP Parsing State
+	bool _headersParsed;
+	size_t _contentLength;
+	bool _hasContentLength;
+	// bool _isChunked;
 
-		// Connection Properties
-		bool _keepAlive;
-		std::string _clientIP;
-		int _clientPort;
+	// Connection Properties
+	bool _keepAlive;
+	std::string _clientIP;
+	int _clientPort;
 
-		// Statistics
-		size_t _bytesRead;
-		size_t _bytesWritten;
-		int _requestCount;
-	
-	public:
-		ClientConnection(int fd);
-		~ClientConnection();
+	// Statistics
+	size_t _bytesRead;
+	size_t _bytesWritten;
+	int _requestCount;
 
-		// I/O Operations
-		bool readData();
-		bool writeData();
-		void appendToWriteBuffer(const std::string &data);
-		void clearReadBuffer();
-		void clearWriteBuffer();
+public:
+	ClientConnection(int fd);
+	~ClientConnection();
 
-		// State Management
-		ConnectionState getState() const;
-		void setState(ConnectionState state);
-		void updateActivity();
+	// I/O Operations
+	bool readData();
+	bool writeData();
+	void appendToWriteBuffer(const std::string &data);
+	void clearReadBuffer();
+	void clearWriteBuffer();
 
-		// Buffer Access
-		const std::string & getReadBuffer() const;
-		const std::string & getWriteBuffer() const;
-		bool hasDataToWrite() const;
-		bool hasCompleteRequest() const;
+	// State Management
+	ConnectionState getState() const;
+	void setState(ConnectionState state);
+	void updateActivity();
 
-		// Timeout Checking
-		bool isTimedOut(time_t timeout) const;
-		time_t getLastActivity() const;
-		time_t getAge() const;
+	// Buffer Access
+	const std::string &getReadBuffer() const;
+	const std::string &getWriteBuffer() const;
+	bool hasDataToWrite() const;
+	bool hasCompleteRequest() const;
 
-		// Connection Properties
-		int getFd() const;
-		bool isKeepAlive() const;
-		void setKeepAlive(bool keepAlive);
+	// Timeout Checking
+	bool isTimedOut(time_t timeout) const;
+	time_t getLastActivity() const;
+	time_t getAge() const;
 
-		// Client Info
-		void setClientInfo(const std::string &ip, int port);
-		const std::string & getClientIP() const;
-		int getClientPort() const;
+	// Connection Properties
+	int getFd() const;
+	bool isKeepAlive() const;
+	void setKeepAlive(bool keepAlive);
 
-		// Statistics
-		size_t getBytesRead() const;
-		size_t getBytesWritten() const;
-		int getRequestCount() const;
-		void incrementRequestCount();
+	// Client Info
+	void setClientInfo(const std::string &ip, int port);
+	const std::string &getClientIP() const;
+	int getClientPort() const;
 
-		// Helper Methods for Server Class
-		bool needsRead() const;
-		bool needsWrite() const;
-		bool shouldClose() const;
+	// Statistics
+	size_t getBytesRead() const;
+	size_t getBytesWritten() const;
+	int getRequestCount() const;
+	void incrementRequestCount();
+
+	// Helper Methods for Server Class
+	bool needsRead() const;
+	bool needsWrite() const;
+	bool shouldClose() const;
 };
-	
+
 #endif

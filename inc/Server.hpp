@@ -58,6 +58,7 @@ private:
 	void removeClient(int clientFd);
 	void cleanupTimedOutClients();
 	void processClientRemovalQueue();
+	void processRequest(int clientFd);
 
 	// I/O Multiplexing helpers
 	void setupFdSets();
