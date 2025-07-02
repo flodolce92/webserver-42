@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <sstream>
 #include <ConfigManager.hpp>
+#include <Request.hpp>
 
 // // Define static const members
 const int Server::_REUSE_ADDR_OPT = 1;
@@ -32,18 +33,18 @@ static std::string toString(T value)
 
 Server::Server(const ConfigManager & configManager): _configManager(configManager)
 {
-	
+
 	// I/O Multiplexing
 	this->_maxFd = -1;
 	FD_ZERO(&this->_readFds);
 	FD_ZERO(&this->_writeFds);
 	FD_ZERO(&this->_exceptFds);
-	
+
 	// Server State
 	this->_running = false;
 	this->_initialized = false;
 	this->_shutdownRequested = false;
-	
+
 	// Timing
 	this->_lastCleanup = time(NULL);
 	this->_timeout.tv_sec = _TIMEOUT_SECONDS;
@@ -109,7 +110,7 @@ bool Server::initialize()
 		memset(&serverAddress, 0, sizeof(serverAddress));
 		serverAddress.sin_family = AF_INET;
 		serverAddress.sin_port = htons(currentConfig.port);
-		
+
 		// Convert the localhost
 		std::string host;
 		if (currentConfig.host == "localhost")
@@ -522,7 +523,8 @@ void Server::processRequest(int clientFd)
 	std::cout << "Client " << clientFd << "'s request: " << std::endl;
 	std::cout << client->getReadBuffer() << std::endl;
 	std::cout << "--------------------------" << std::endl;
-	Response response(client, this->_configManager);
+	// Response response(client, this->_configManager);
+	Request request(client->getReadBuffer());
 
 	client->setState(CONN_WRITING_RESPONSE);
 }
