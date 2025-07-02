@@ -32,7 +32,7 @@ Response::Response(
 	this->_server = server;
 
 	// Set matched location and check if method allowed
-	this->_matchedLocation = server->findMatchingLocation(this->_request.getUri());
+	this->_matchedLocation = server->findMatchingLocation(this->_request.getPath());
 	if (configManager.isMethodAllowed(*this->_matchedLocation, this->getMethod()) == false)
 	{
 		this->setErrorFilePathForStatus(StatusCodes::METHOD_NOT_ALLOWED);
@@ -47,8 +47,8 @@ Response::Response(
 		return;
 	}
 
-	// TODO: Remember to change the Uri (do not include the query string)
-	ResolutionResult result = FileServer::resolveStaticFilePath(this->_request.getUri(), *this->_matchedLocation);
+	// Use getPath to trim query string
+	ResolutionResult result = FileServer::resolveStaticFilePath(this->_request.getPath(), *this->_matchedLocation);
 	this->_filePath = result.path;
 
 	// Check if there was an error in resolving the path
@@ -171,8 +171,7 @@ void Response::handleCGI()
 	env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
 	env_var["request_method"] = this->getMethod();
 	env_var["server_name"] = "Webserv/1.0";
-	// TODO: Remember to change the Uri (to include only the query string)
-	env_var["query_string"] = this->_request.getUri();
+	env_var["query_string"] = this->_request.getQueryString();
 
 	CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
 }
@@ -272,7 +271,7 @@ std::string Response::getMethod() const
 
 std::string Response::getFileName() const
 {
-	return this->_request.getUri();
+	return this->_request.getPath();
 }
 
 void Response::readFile()
