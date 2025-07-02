@@ -157,4 +157,56 @@ std::string FileServer::getMimeType(const std::string &filePath)
 
 std::string FileServer::generateDirectoryListing(const std::string &directoryPath)
 {
+	std::string listing = "<html><head><title>Index of " + directoryPath + "</title>";
+	listing += "<style>";
+	listing += "body { font-family: monospace; background-color: #f0f0f0; color: #333; }";
+	listing += "h1 { color: #0056b3; }";
+	listing += "pre { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; }";
+	listing += "a { color: #007bff; text-decoration: none; }";
+	listing += "a:hover { text-decoration: underline; }";
+	listing += "</style>";
+	listing += "</head><body>";
+	listing += "<h1>Index of " + directoryPath + "</h1><hr><pre>";
+
+	DIR *dir = opendir(directoryPath.c_str());
+	if (!dir)
+	{
+		// std::cerr << "FileServer::generateDirectoryListing: Could not open directory: " << directoryPath << std::endl;
+		return "<h1>Error: Could not list directory contents.</h1></body></html>";
+	}
+
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL)
+	{
+		std::string name = entry->d_name;
+		if (name == "." || name == "..")
+		{
+			if (name == "..")
+				listing += "<a href=\"../\">../</a>\n";
+			continue;
+		}
+
+		std::string fullEntryPath = directoryPath;
+		if (fullEntryPath[fullEntryPath.length() - 1] != '/')
+			fullEntryPath += '/';
+		fullEntryPath += name;
+
+		struct stat st;
+		if (stat(fullEntryPath.c_str(), &st) == 0)
+		{
+			if (S_ISDIR(st.st_mode))
+				name += "/"; // Append slash for directories
+			// Generate link relative to the current directory
+			listing += "<a href=\"" + name + "\">" + name + "</a>\n";
+		}
+		else
+		{
+			// Fallback if stat fails for some reason (e.g., permissions)
+			listing += name + "\n";
+		}
+	}
+	closedir(dir);
+
+	listing += "</pre><hr></body></html>";
+	return listing;
 }
