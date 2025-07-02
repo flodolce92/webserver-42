@@ -2,6 +2,7 @@
 
 import os
 import sys
+from urllib.parse import parse_qs
 
 print("Content-Type: text/html\r\n")
 print("""
@@ -44,11 +45,15 @@ print("""
 </head>
 <body>
     <div class="container">
-        <h1>Hello from Python CGI!</h1>
-        <h2>Environment Variables:</h2>
 """)
 
-print('        <pre>', end='')
+query_string = os.environ.get("QUERY_STRING", "")
+params = parse_qs(query_string)
+name = params.get('name', ['Guest'])[0]
+
+print(f"        <h1>Hello {name} from Python CGI!</h1>")
+print("        <h2>Environment Variables:</h2>")
+print("        <pre>", end='')
 
 for key, value in os.environ.items():
     print(f"{key}={value}")

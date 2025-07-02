@@ -46,6 +46,7 @@ struct ServerConfig
 	std::vector<Route> routes;
 
 	ServerConfig();
+	const Route *findMatchingRoute(const std::string &requestPath) const;
 };
 
 // Main configuration structure
