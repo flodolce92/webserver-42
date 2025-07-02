@@ -30,11 +30,11 @@ int main(int argc, char *argv[])
 					std::cout << "Root: " << matchedLocation->root << "\n";
 
 					// Resolve file path using FileServer
-					std::string filePath = FileServer::resolveStaticFilePath(requestPath, *matchedLocation);
-					if (!filePath.empty())
+					ResolutionResult result = FileServer::resolveStaticFilePath(requestPath, *matchedLocation);
+					if (!result.path.empty())
 					{
-						std::cout << "File path resolved: " << filePath << "\n";
-						std::string content = FileServer::readFileContent(filePath);
+						std::cout << "File path resolved: " << result.path << "\n";
+						std::string content = FileServer::readFileContent(result.path);
 						if (!content.empty())
 							std::cout << "File content read successfully.\n";
 					}
@@ -42,9 +42,9 @@ int main(int argc, char *argv[])
 					{
 						// Handle case where file path could not be resolved
 						std::cout << "❌ No file found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
-						std::string errorPage = server.getErrorPage(404, *matchedLocation);
-						if (!errorPage.empty())
-							std::cout << "Serving custom 404 error page: " << errorPage << "\n";
+						ResolutionResult errorPage = server.getErrorPage(404, *matchedLocation);
+						if (!errorPage.path.empty())
+							std::cout << "Serving custom 404 error page: " << errorPage.path << "\n";
 						else
 							std::cout << "❌ No custom 404 error page configured for server: " << server.host << ":" << server.port << "\n";
 					}

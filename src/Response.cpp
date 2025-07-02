@@ -4,17 +4,15 @@ static int ft_stoi(std::string s);
 static std::string extractHostName(const std::string &host);
 static int extractPort(const std::string &host);
 
-
 Response::Response(
-    const ConfigManager &configManager,
-    const Request &request) :
-    _request(request),
-    _body(""),
-    _status(StatusCodes::OK),
-    _configManager(configManager),
-    _server(NULL),
-	_errorFound(false),
-	_connectionError(false)
+	const ConfigManager &configManager,
+	const Request &request) : _request(request),
+							  _body(""),
+							  _status(StatusCodes::OK),
+							  _configManager(configManager),
+							  _server(NULL),
+							  _errorFound(false),
+							  _connectionError(false)
 {
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
@@ -23,7 +21,7 @@ Response::Response(
 		this->buildResponseContent();
 		return;
 	}
-	
+
 	const ServerConfig *server = configManager.findServer(this->_host, this->_port);
 	if (server == NULL)
 	{
@@ -39,21 +37,37 @@ Response::Response(
 	{
 		this->setErrorFilePathForStatus(StatusCodes::METHOD_NOT_ALLOWED);
 		this->buildResponseContent();
-		return ;
+		return;
 	}
 
 	// Redirect if requested
-	if (this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY 
-		&& !(this->_matchedLocation->redirect_url.empty()))
+	if (this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY && !(this->_matchedLocation->redirect_url.empty()))
 	{
 		this->handleRedirect();
-		return ;
+		return;
 	}
 
 	// TODO: Remember to change the Uri (do not include the query string)
-	this->_filePath = FileServer::resolveStaticFilePath(this->_request.getUri(), *this->_matchedLocation);
+	ResolutionResult result = FileServer::resolveStaticFilePath(this->_request.getUri(), *this->_matchedLocation);
+	this->_filePath = result.path;
 
-	
+	// Check if there was an error in resolving the path
+	if (result.pathType == ERROR)
+	{
+		// Set the error page path based on the status code
+		this->setErrorFilePathForStatus(static_cast<StatusCodes::Code>(result.statusCode));
+		this->buildResponseContent();
+		return;
+	}
+	else if (result.pathType == DIRECTORY)
+	{
+		this->_status = StatusCodes::OK;
+		this->_body = FileServer::generateDirectoryListing(this->_filePath);
+		this->mimeType = FileServer::getMimeType(".html");
+		this->buildResponseContent();
+		return;
+	}
+
 	if (configManager.isCGIRequest(*this->_matchedLocation, this->_filePath) == true)
 	{
 		this->handleCGI();
@@ -75,16 +89,16 @@ Response::Response(const Response &src) : _request(src._request), _configManager
 	std::cout << "Response created as a copy of Response" << std::endl;
 
 	this->_body = src._body;
-    this->_status = src._status;
-    this->mimeType = src.mimeType;
-    this->_fullResponse = src._fullResponse;
-    this->_host = src._host;
-    this->_port = src._port;
-    this->_server = src._server;
-    this->_errorPageFilePath = src._errorPageFilePath;
-    this->_filePath = src._filePath;
-    this->_statusCodeMessages = src._statusCodeMessages;
-    this->_matchedLocation = src._matchedLocation;
+	this->_status = src._status;
+	this->mimeType = src.mimeType;
+	this->_fullResponse = src._fullResponse;
+	this->_host = src._host;
+	this->_port = src._port;
+	this->_server = src._server;
+	this->_errorPageFilePath = src._errorPageFilePath;
+	this->_filePath = src._filePath;
+	this->_statusCodeMessages = src._statusCodeMessages;
+	this->_matchedLocation = src._matchedLocation;
 	this->_errorFound = src._errorFound;
 	this->_connectionError = src._connectionError;
 }
@@ -96,16 +110,16 @@ Response &Response::operator=(const Response &src)
 	if (this != &src)
 	{
 		this->_body = src._body;
-        this->_status = src._status;
-        this->mimeType = src.mimeType;
-        this->_fullResponse = src._fullResponse;
-        this->_host = src._host;
-        this->_port = src._port;
-        this->_server = src._server;
-        this->_errorPageFilePath = src._errorPageFilePath;
-        this->_filePath = src._filePath;
-        this->_statusCodeMessages = src._statusCodeMessages;
-        this->_matchedLocation = src._matchedLocation;
+		this->_status = src._status;
+		this->mimeType = src.mimeType;
+		this->_fullResponse = src._fullResponse;
+		this->_host = src._host;
+		this->_port = src._port;
+		this->_server = src._server;
+		this->_errorPageFilePath = src._errorPageFilePath;
+		this->_filePath = src._filePath;
+		this->_statusCodeMessages = src._statusCodeMessages;
+		this->_matchedLocation = src._matchedLocation;
 		this->_errorFound = src._errorFound;
 		this->_connectionError = src._connectionError;
 	}
@@ -139,17 +153,16 @@ void Response::handleRedirect()
 	oss << "Content-Length: " << this->_body.length() << "\r\n";
 	contentLengthHeader = oss.str();
 	this->_fullResponse = "HTTP/1.1 301 Moved Permanently\r\n" +
-							contentLengthHeader +
-							connection +
-							location +
-							server +
-							"\r\n" +
-							this->_body;
+						  contentLengthHeader +
+						  connection +
+						  location +
+						  server +
+						  "\r\n" +
+						  this->_body;
 }
 
 void Response::handleCGI()
 {
-	std::string fullPath = FileServer::resolveStaticFilePath(this->_filePath, *this->_matchedLocation);
 	std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
 
 	std::map<std::string, std::string> env_var = this->_request.getHeaders();
@@ -157,41 +170,33 @@ void Response::handleCGI()
 	env_var["script_filename"] = this->_filePath;
 	env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
 	env_var["request_method"] = this->getMethod();
-	env_var["server_name"] =  "Webserv/1.0";
+	env_var["server_name"] = "Webserv/1.0";
 	// TODO: Remember to change the Uri (to include only the query string)
 	env_var["query_string"] = this->_request.getUri();
 
-	// CGIHandler::executeCGI(fullPath, this->_request.getBody(), env_var);
+	// CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
 }
 
 void Response::handleGet()
 {
-	if (this->_filePath.size() == 0) {
-		
-		if (!this->_server->autoindex) {
-			this->setErrorFilePathForStatus(StatusCodes::FORBIDDEN);
-		}
-		else {
-			this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
-		}
-	}
+	// The constructor has already called setErrorFilePathForStatus for all ERROR cases
 	this->buildResponseContent();
 }
 
 void Response::handlePost()
 {
 	std::cout << "POST" << std::endl;
-	
+
 	std::string fileName = this->extractFileName();
 	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
-	
+
 	if (access(fullPath.c_str(), F_OK) == 0)
 	{
 		this->setErrorFilePathForStatus(StatusCodes::CONFLICT);
 		this->buildResponseContent();
 		return;
 	}
-	
+
 	std::ofstream newFile(fullPath.c_str(), std::ios::out | std::ios::binary);
 	if (newFile.is_open())
 	{
@@ -274,51 +279,43 @@ void Response::readFile()
 {
 	struct stat fileInfo;
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
-    {
-        std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
-        this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
-        this->readFileError();
-        return;
-    }
-    
-    // Check if the path is a directory
-    if (S_ISDIR(fileInfo.st_mode))
-    {
-		if (this->_matchedLocation->autoindex) {
-			this->_body = FileServer::generateDirectoryListing(this->_filePath);
-			this->mimeType = FileServer::getMimeType(".html");
-			this->buildResponseContent();
-			return;
-		}
-        // Handle directory case
-        std::cerr << "Path is a directory: '" << this->_filePath << "'" << std::endl;
-        this->setErrorFilePathForStatus(StatusCodes::FORBIDDEN);
-        this->readFileError();
-        return;
-    }
+	{
+		std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
+		this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
+		this->readFileError();
+		return;
+	}
 
 	this->_body = FileServer::readFileContent(this->_filePath);
+
+	if (this->_body.empty())
+	{
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->readFileError();
+		return;
+	}
 }
 
 void Response::readFileError()
 {
 	struct stat fileInfo;
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
-    {
-        std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
-        this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+	{
+		std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
 		this->_connectionError = true;
 		this->_body = "<!DOCTYPE html><html><head><title>Error</title><style>body { font-family: sans-serif; text-align: center; margin-top: \
 			50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } \
 			h1 { color: #d9534f; }</style></head><body><div class='container'><h1>500 Internal Server Error</h1><p> \
 			The server encountered an unexpected condition that prevented it from fulfilling the request.</p></div></body></html>";
-        return;
-    }
-    
+		return;
+	}
+
 	this->_body = FileServer::readFileContent(this->_filePath);
 }
 
-void Response::buildResponseContent() {
+void Response::buildResponseContent()
+{
 	// Read the file content
 	if (this->_errorFound == true)
 		this->readFileError();
@@ -355,168 +352,168 @@ void Response::buildResponseContent() {
 
 	switch (this->_status)
 	{
-		case StatusCodes::OK: // OK - Successful response
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 200 OK\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::OK: // OK - Successful response
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 200 OK\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::CREATED: // Created - Resource successfully created
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 201 Created\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::CREATED: // Created - Resource successfully created
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 201 Created\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::NO_CONTENT: // No Content - Request successful, but no content to send (e.g., successful DELETE)
-			this->_fullResponse = "HTTP/1.1 204 No Content\r\n" +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::NO_CONTENT: // No Content - Request successful, but no content to send (e.g., successful DELETE)
+		this->_fullResponse = "HTTP/1.1 204 No Content\r\n" +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::BAD_REQUEST: // Bad Request - Client sent a malformed request
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 400 Bad Request\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::BAD_REQUEST: // Bad Request - Client sent a malformed request
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 400 Bad Request\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::FORBIDDEN: // Forbidden - Client doesn't have access rights
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 403 Forbidden\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::FORBIDDEN: // Forbidden - Client doesn't have access rights
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 403 Forbidden\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::NOT_FOUND: // Not Found - Resource not found
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 404 Not Found\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::NOT_FOUND: // Not Found - Resource not found
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 404 Not Found\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::METHOD_NOT_ALLOWED: // Method Not Allowed - HTTP method not supported for resource
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, POST\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::METHOD_NOT_ALLOWED: // Method Not Allowed - HTTP method not supported for resource
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, POST\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::CONFLICT: // Conflict - Request could not be completed due to a conflict
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 409 Conflict\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::CONFLICT: // Conflict - Request could not be completed due to a conflict
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 409 Conflict\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::PAYLOAD_TOO_LARGE: // Payload Too Large - Request entity is larger than limits defined by server
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 413 Payload Too Large\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::PAYLOAD_TOO_LARGE: // Payload Too Large - Request entity is larger than limits defined by server
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 413 Payload Too Large\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::INTERNAL_SERVER_ERROR: // Internal Server Error - Generic server-side error
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::INTERNAL_SERVER_ERROR: // Internal Server Error - Generic server-side error
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::NOT_IMPLEMENTED: // Not Implemented - Server does not support the functionality required to fulfill the request
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 501 Not Implemented\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::NOT_IMPLEMENTED: // Not Implemented - Server does not support the functionality required to fulfill the request
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 501 Not Implemented\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		case StatusCodes::GATEWAY_ERROR: // Gateway Timeout - The server, while acting as a gateway or proxy, did not get a response from an upstream server in time
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 504 Gateway Timeout\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	case StatusCodes::GATEWAY_ERROR: // Gateway Timeout - The server, while acting as a gateway or proxy, did not get a response from an upstream server in time
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 504 Gateway Timeout\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 
-		default: // Generic default for unexpected cases or unsupported status codes
-			oss.str("");
-			oss << "Content-Length: " << this->_body.length() << "\r\n";
-			contentLengthHeader = oss.str();
-			this->_fullResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
-								contentType +
-								contentLengthHeader +
-								connection +
-								server +
-								"\r\n" +
-								this->_body;
-			break;
+	default: // Generic default for unexpected cases or unsupported status codes
+		oss.str("");
+		oss << "Content-Length: " << this->_body.length() << "\r\n";
+		contentLengthHeader = oss.str();
+		this->_fullResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
+		break;
 	}
 }
 
@@ -563,10 +560,10 @@ std::string Response::extractFileName()
 		std::string fileName = fileNameDirt.substr(fromFind);
 		fileName.erase(0, fileName.find_first_of("\"") + 1);
 		fileName.erase(fileName.length() - 1, 1);
-		
+
 		return (fileName);
 	}
-	catch (const std::exception& e)
+	catch (const std::exception &e)
 	{
 		return "";
 	}
@@ -575,8 +572,15 @@ std::string Response::extractFileName()
 void Response::setErrorFilePathForStatus(StatusCodes::Code status)
 {
 	if (this->_errorFound == true)
-		return ;
+		return;
 	this->_status = status;
 	this->_errorFound = true;
-	this->_filePath = this->_server->getErrorPage(this->_status, *this->_matchedLocation);
+	ResolutionResult result = this->_server->getErrorPage(this->_status, *this->_matchedLocation);
+
+	// If a custom error page was found, use its path
+	// If no custom error page found, response should be a static error string
+	if (result.pathType != ERROR)
+		this->_filePath = result.path;
+	else
+		this->_filePath = "";
 }
