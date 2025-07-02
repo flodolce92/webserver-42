@@ -1,4 +1,4 @@
-#include <ConfigParser.hpp>
+#include <ConfigManager.hpp>
 #include <Server.hpp>
 #include <iostream>
 
@@ -8,11 +8,11 @@ int main(int argc, char *argv[])
 	{
 		try
 		{
-			ConfigParser parser;
-			Config config = parser.parseFile(argv[1]);
+			ConfigManager configManager;
+			configManager.loadConfig(argv[1]);
 
 			std::cout << "✅ Successfully parsed: " << argv[1] << "\n";
-			parser.printConfig(config);
+			configManager.printConfiguration();
 			std::cout << std::endl;
 		}
 		catch (const std::exception &e)

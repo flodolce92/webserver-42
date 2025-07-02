@@ -1,5 +1,5 @@
 NAME = webserv
-SRC = src/Server.cpp src/Buffer.cpp src/ClientConnection.cpp src/main.cpp src/ConfigParser.cpp
+SRC = src/Server.cpp src/Buffer.cpp src/ClientConnection.cpp src/main.cpp src/ConfigParser.cpp src/ConfigManager.cpp
 OBJ = $(SRC:.cpp=.o)
 CC = c++
 CFLAGS = -Wall -Wextra -Werror -std=c++98 -g3
