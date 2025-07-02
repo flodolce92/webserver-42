@@ -2,13 +2,36 @@
 #include <cctype>
 
 // Route
-Route::Route() : directory_listing(false), upload_enabled(false) {}
+Route::Route()
+	: path(""),
+	  allowed_methods(),
+	  redirect_code(0),
+	  redirect_url(""),
+	  redirect(""),
+	  root(""),
+	  directory_listing(false),
+	  index(""),
+	  index_files(),
+	  cgi_extension(""),
+	  cgi_path(""),
+	  upload_path(""),
+	  upload_enabled(false)
+{
+}
 
 // ServerConfig
-ServerConfig::ServerConfig() : host("localhost"), port(80), client_max_body_size(1048576) {}
+ServerConfig::ServerConfig()
+	: host("localhost"),
+	  port(80),
+	  server_names(),
+	  error_pages(),
+	  client_max_body_size(1048576),
+	  routes()
+{
+}
 
 // Config
-Config::Config() {}
+Config::Config() : servers() {}
 
 // ConfigParser
 ConfigParser::ConfigParser() : pos(0), line_num(1) {}
@@ -18,9 +41,8 @@ Config ConfigParser::parseFile(const std::string &filename)
 {
 	std::ifstream file(filename.c_str());
 	if (!file.is_open())
-	{
 		throw std::runtime_error("Cannot open configuration file: " + filename);
-	}
+
 	std::stringstream buffer;
 	buffer << file.rdbuf();
 	content = buffer.str();
@@ -44,37 +66,33 @@ Config ConfigParser::parseString(const std::string &config_content)
 
 void ConfigParser::skipWhitespace()
 {
-	while (pos < content.length() && (content[pos] == ' ' || content[pos] == '\t' ||
-									  content[pos] == '\n' || content[pos] == '\r'))
+	while (!isAtEnd() && (content[pos] == ' ' || content[pos] == '\t' ||
+						  content[pos] == '\n' || content[pos] == '\r'))
 	{
 		if (content[pos] == '\n')
-		{
 			line_num++;
-		}
 		pos++;
 	}
 }
 
 void ConfigParser::skipComments()
 {
-	if (pos < content.length() && content[pos] == '#')
+	if (!isAtEnd() && content[pos] == '#')
 	{
-		while (pos < content.length() && content[pos] != '\n')
-		{
+		while (!isAtEnd() && content[pos] != '\n')
 			pos++;
-		}
 	}
 }
 
 std::string ConfigParser::getRestOfLine()
 {
 	skipWhitespace();
+
 	if (isAtEnd())
-	{
 		return "";
-	}
+
 	std::string value;
-	while (pos < content.length() && content[pos] != ';' && content[pos] != '\n' && content[pos] != '\r')
+	while (!isAtEnd() && content[pos] != ';' && content[pos] != '\n' && content[pos] != '\r')
 	{
 		value += content[pos];
 		pos++;
@@ -87,33 +105,29 @@ std::string ConfigParser::getNextToken()
 	skipWhitespace();
 	skipComments();
 	skipWhitespace();
+
 	if (isAtEnd())
-	{
 		return "";
-	}
+
 	std::string token;
 	if (content[pos] == '"' || content[pos] == '\'')
 	{
 		char quote = content[pos];
 		pos++;
-		while (pos < content.length() && content[pos] != quote)
+		while (!isAtEnd() && content[pos] != quote)
 		{
 			if (content[pos] == '\\' && pos + 1 < content.length())
-			{
 				pos++;
-			}
 			token += content[pos];
 			pos++;
 		}
-		if (pos >= content.length())
-		{
+		if (isAtEnd())
 			throwError("Unterminated quoted string");
-		}
 		pos++;
 	}
 	else
 	{
-		while (pos < content.length() && content[pos] != ' ' && content[pos] != '\t' &&
+		while (!isAtEnd() && content[pos] != ' ' && content[pos] != '\t' &&
 			   content[pos] != '\n' && content[pos] != '\r' && content[pos] != ';' &&
 			   content[pos] != '{' && content[pos] != '}' && content[pos] != '#')
 		{
@@ -139,47 +153,41 @@ void ConfigParser::throwError(const std::string &message) const
 Config ConfigParser::parseConfig()
 {
 	Config config;
+
 	while (!isAtEnd())
 	{
 		std::string token = getNextToken();
 		if (token.empty())
-		{
 			break;
-		}
+
 		if (token == "server")
-		{
 			config.servers.push_back(parseServer());
-		}
 		else
-		{
 			throwError("Expected 'server' directive, got: " + token);
-		}
 	}
+
 	if (config.servers.empty())
-	{
 		throwError("No server blocks found in configuration");
-	}
 	return config;
 }
 
 ServerConfig ConfigParser::parseServer()
 {
 	ServerConfig server;
+
 	skipWhitespace();
-	if (pos >= content.length() || content[pos] != '{')
-	{
+	if (isAtEnd() || content[pos] != '{')
 		throwError("Expected '{' after 'server'");
-	}
+
 	pos++;
 	while (!isAtEnd())
 	{
 		skipWhitespace();
 		skipComments();
 		skipWhitespace();
-		if (pos >= content.length())
-		{
+		if (isAtEnd())
 			throwError("Unexpected end of file, expected '}'");
-		}
+
 		if (content[pos] == '}')
 		{
 			pos++;
@@ -187,30 +195,21 @@ ServerConfig ConfigParser::parseServer()
 		}
 		std::string directive = getNextToken();
 		if (directive.empty())
-		{
 			throwError("Empty directive");
-		}
+
 		if (directive == "location")
-		{
 			server.routes.push_back(parseLocation());
-		}
 		else
 		{
 			std::string value;
 			if (directive == "server_name" || directive == "error_page")
-			{
 				value = getRestOfLine();
-			}
 			else
-			{
 				value = getNextToken();
-			}
 			parseServerDirective(server, directive, value);
 			skipWhitespace();
-			if (pos < content.length() && content[pos] == ';')
-			{
+			if (!isAtEnd() && content[pos] == ';')
 				pos++;
-			}
 		}
 	}
 	return server;
@@ -220,25 +219,23 @@ Route ConfigParser::parseLocation()
 {
 	Route route;
 	route.path = getNextToken();
+
 	if (route.path.empty())
-	{
 		throwError("Location path cannot be empty");
-	}
+
 	skipWhitespace();
-	if (pos >= content.length() || content[pos] != '{')
-	{
+	if (isAtEnd() || content[pos] != '{')
 		throwError("Expected '{' after location path");
-	}
+
 	pos++;
 	while (!isAtEnd())
 	{
 		skipWhitespace();
 		skipComments();
 		skipWhitespace();
-		if (pos >= content.length())
-		{
+		if (isAtEnd())
 			throwError("Unexpected end of file, expected '}'");
-		}
+
 		if (content[pos] == '}')
 		{
 			pos++;
@@ -246,24 +243,17 @@ Route ConfigParser::parseLocation()
 		}
 		std::string directive = getNextToken();
 		if (directive.empty())
-		{
 			throwError("Empty directive in location block");
-		}
+
 		std::string value;
 		if (directive == "allow_methods" || directive == "index" || directive == "return")
-		{
 			value = getRestOfLine();
-		}
 		else
-		{
 			value = getNextToken();
-		}
 		parseLocationDirective(route, directive, value);
 		skipWhitespace();
-		if (pos < content.length() && content[pos] == ';')
-		{
+		if (!isAtEnd() && content[pos] == ';')
 			pos++;
-		}
 	}
 	return route;
 }
@@ -279,9 +269,7 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 			server.port = std::atoi(value.substr(colon_pos + 1).c_str());
 		}
 		else
-		{
 			server.port = std::atoi(value.c_str());
-		}
 	}
 	else if (directive == "server_name")
 	{
@@ -297,9 +285,7 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 			{
 				int error_code = std::atoi(parts[i].c_str());
 				if (error_code > 0)
-				{
 					server.error_pages[error_code] = page_path;
-				}
 			}
 		}
 	}
@@ -308,9 +294,7 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 		server.client_max_body_size = parseSize(value);
 	}
 	else
-	{
 		throwError("Unknown server directive: " + directive);
-	}
 }
 
 void ConfigParser::parseLocationDirective(Route &route, const std::string &directive, const std::string &value)
@@ -333,9 +317,7 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 			route.redirect_url = parts[0];
 		}
 		else
-		{
 			throwError("Invalid return directive format");
-		}
 	}
 	else if (directive == "root")
 	{
@@ -368,9 +350,7 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		route.upload_enabled = true;
 	}
 	else
-	{
 		throwError("Unknown location directive: " + directive);
-	}
 }
 
 std::vector<std::string> ConfigParser::split(const std::string &str, char delimiter) const
@@ -378,13 +358,12 @@ std::vector<std::string> ConfigParser::split(const std::string &str, char delimi
 	std::vector<std::string> result;
 	std::stringstream ss(str);
 	std::string item;
+
 	while (std::getline(ss, item, delimiter))
 	{
 		item = trim(item);
 		if (!item.empty())
-		{
 			result.push_back(item);
-		}
 	}
 	return result;
 }
@@ -393,9 +372,8 @@ std::string ConfigParser::trim(const std::string &str) const
 {
 	size_t start = str.find_first_not_of(" \t\n\r");
 	if (start == std::string::npos)
-	{
 		return "";
-	}
+
 	size_t end = str.find_last_not_of(" \t\n\r");
 	return str.substr(start, end - start + 1);
 }
@@ -414,9 +392,8 @@ bool ConfigParser::isValidPort(int port) const
 size_t ConfigParser::parseSize(const std::string &sizeStr) const
 {
 	if (sizeStr.empty())
-	{
 		return 0;
-	}
+
 	std::string numStr = sizeStr;
 	size_t multiplier = 1;
 	char lastChar = std::tolower(sizeStr[sizeStr.length() - 1]);
@@ -449,9 +426,8 @@ void ConfigParser::validateConfig(const Config &config) const
 void ConfigParser::validateServer(const ServerConfig &server) const
 {
 	if (!isValidPort(server.port))
-	{
 		throwError("Invalid port number");
-	}
+
 	for (size_t i = 0; i < server.routes.size(); ++i)
 	{
 		validateRoute(server.routes[i]);
@@ -461,15 +437,12 @@ void ConfigParser::validateServer(const ServerConfig &server) const
 void ConfigParser::validateRoute(const Route &route) const
 {
 	if (route.path.empty())
-	{
 		throwError("Route path cannot be empty");
-	}
+
 	for (size_t i = 0; i < route.allowed_methods.size(); ++i)
 	{
 		if (!isValidMethod(route.allowed_methods[i]))
-		{
 			throwError("Invalid HTTP method: " + route.allowed_methods[i]);
-		}
 	}
 }
 
@@ -560,4 +533,5 @@ void ConfigParser::printConfig(const Config &config) const
 			}
 		}
 	}
+	std::cout << "=== End of Configuration ===\n";
 }
