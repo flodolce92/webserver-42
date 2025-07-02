@@ -39,7 +39,15 @@ int main(int argc, char *argv[])
 							std::cout << "File content read successfully.\n";
 					}
 					else
+					{
+						// Handle case where file path could not be resolved
 						std::cout << "❌ No file found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
+						std::string errorPage = server.getErrorPage(404, *matchedLocation);
+						if (!errorPage.empty())
+							std::cout << "Serving custom 404 error page: " << errorPage << "\n";
+						else
+							std::cout << "❌ No custom 404 error page configured for server: " << server.host << ":" << server.port << "\n";
+					}
 				}
 				else
 					std::cout << "❌ No matching location found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";

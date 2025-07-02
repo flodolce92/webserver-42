@@ -51,6 +51,7 @@ struct ServerConfig
 
 	ServerConfig();
 	const Location *findMatchingLocation(const std::string &requestPath) const;
+	std::string getErrorPage(int code, const Location &location) const;
 };
 
 // Main configuration structure
