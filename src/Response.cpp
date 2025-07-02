@@ -174,7 +174,7 @@ void Response::handleCGI()
 	// TODO: Remember to change the Uri (to include only the query string)
 	env_var["query_string"] = this->_request.getUri();
 
-	// CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
+	CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
 }
 
 void Response::handleGet()
