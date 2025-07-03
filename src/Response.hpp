@@ -10,6 +10,7 @@ private:
 	int					_code;
 	const char*			_fileName;
 	char* 				_message;
+	std::string			_body;
 	std::string 		_header;
 
 public:
@@ -17,8 +18,9 @@ public:
 	Response( const Response& src );
 	Response& operator=( const Response& src );
 	~Response();
-	void sendData(size_t len);
+	void sendData( size_t len );
 	void readFile();
+	void setHeader(int responseCase);
 };
 
 #endif

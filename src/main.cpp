@@ -10,7 +10,7 @@
 // Helper function to log errors and exit
 void error_exit(const char* msg)
 {
-	std::cerr << (msg) << "\n";
+	std::cerr << (msg) << std::endl;
 	exit(EXIT_FAILURE);
 }
 
@@ -55,17 +55,17 @@ int main()
 	if (listen(server_fd, 10) < 0)
 		error_exit("listen failed");
 
-	std::cout << "Server listening on port " << DEFAULT_PORT << "..." << "\n";
-	std::cout << "Serving file: " << HTML_FILE << "\n";
+	std::cout << "Server listening on port " << DEFAULT_PORT << "..." << std::endl;
+	std::cout << "Serving file: " << HTML_FILE << std::endl;
 
 	// 6. Main accept loop
 	while (true)
 	{
-		std::cout << "\nWaiting for a new connection..." << "\n";
+		std::cout << "\nWaiting for a new connection..." << std::endl;
 
 		if ((new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen)) < 0)
 		{
-			std::cerr << "accept failed" << "\n";
+			std::cerr << "accept failed" << std::endl;
 			continue;
 		}
 
@@ -73,13 +73,13 @@ int main()
 
 		if (bytes_read < 0)
 		{
-			std::cerr << "read failed" << "\n";
+			std::cerr << "read failed" << std::endl;
 			close(new_socket);
 			continue;
 		}
 		else if (bytes_read == 0)
 		{
-			std::cerr << "Client disconnected before sending data." << "\n";
+			std::cerr << "Client disconnected before sending data." << std::endl;
 			close(new_socket);
 			continue;
 		}
@@ -87,7 +87,7 @@ int main()
 
 		std::string request_str(buffer);
 		std::string cleanRequest = request_str.substr(0, request_str.find("\n"));
-		std::cout << cleanRequest << "\n";
+		std::cout << cleanRequest << std::endl;
 
 		size_t pos = 0;
 		std::string sub;
@@ -104,24 +104,35 @@ int main()
 		std::vector<std::string>::const_iterator const_it = vectorRequest.begin();
 		if (*const_it == "GET " and request_str[4] != ' ')
 		{
-			Response response = Response(new_socket, 201, "index.html");
+			vectorRequest.erase(vectorRequest.begin());
+			vectorRequest.pop_back();
+			(vectorRequest.back()).erase(((vectorRequest.back()).length() - 5), 5);
+
+			std::string filename;
+			std::vector<std::string>::const_iterator i = vectorRequest.begin();
+			filename = *i;
+			i++;
+			for ( ; i != vectorRequest.end(); i++)
+				filename += '/' + *i;
+
+			Response response = Response(new_socket, 200, filename.c_str());
 			response.readFile();
 		}
 		else if (*const_it == "POST " and request_str[5] != ' ')
 		{
-			std::cout << "POST" << "\n";
+			std::cout << "POST" << std::endl;
 		}
 		else if (*const_it == "DELETE " and request_str[7] != ' ')
 		{
-			std::cout << "DELETE" << "\n";
+			std::cout << "DELETE" << std::endl;
 		}
 		else
 		{
-			std::cout << "not support" << "\n";
+			std::cout << "not support" << std::endl;
 		}
 
 		close(new_socket);
-		std::cout << "Client socket closed." << "\n";
+		std::cout << "Client socket closed." << std::endl;
 
 	}
 	return 0;
