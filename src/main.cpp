@@ -11,21 +11,25 @@ int main(int argc, char *argv[])
 			ConfigManager configManager;
 			configManager.loadConfig(argv[1]);
 
-			std::cout << "✅ Successfully parsed: " << argv[1] << "\n";
+			std::cout << "✅ Successfully parsed: " << argv[1] << "\\n";
 			configManager.printConfiguration();
 			std::cout << std::endl;
+
+			// Server sv = Server(configManager.getServers().at(0).port); // OLD: Initializes only one port
+			Server sv = Server(configManager); // NEW: Initializes with the full ConfigManager
+			sv.initialize();
+			sv.run();
 		}
 		catch (const std::exception &e)
 		{
-			std::cout << "❌ Failed to parse " << argv[1] << ":\n";
-			std::cout << "Error: " << e.what() << "\n";
+			std::cout << "❌ Failed to parse " << argv[1] << ":\\n";
+			std::cout << "Error: " << e.what() << "\\n";
 			return 1;
 		}
-	}
-
-	Server sv = Server(8080);
-	sv.initialize();
-	sv.run();
+	} else {
+        std::cerr << "Usage: " << argv[0] << " <config_file_path>" << std::endl;
+        return 1;
+    }
 
 	return 0;
 }

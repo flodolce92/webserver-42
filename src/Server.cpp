@@ -12,6 +12,7 @@
 #include <sys/errno.h>
 #include <signal.h>
 #include <sstream>
+#include <ConfigManager.hpp>
 
 // // Define static const members
 const int Server::_REUSE_ADDR_OPT = 1;
@@ -28,26 +29,20 @@ static std::string toString(T value)
 	return oss.str();
 }
 
-Server::Server(int port)
+Server::Server(const ConfigManager & configManager): _configManager(configManager)
 {
-	// Server Config
-	this->_serverPort = port;
-	memset(&this->_serverAddress, 0, sizeof(this->_serverAddress));
-	this->_serverAddress.sin_addr.s_addr = INADDR_ANY;
-	this->_serverAddress.sin_family = AF_INET;
-	this->_serverAddress.sin_port = htons(port);
-
+	
 	// I/O Multiplexing
 	this->_maxFd = -1;
-	FD_ZERO(&this->_masterReadFds);
-	FD_ZERO(&this->_masterWriteFds);
+	FD_ZERO(&this->_readFds);
+	FD_ZERO(&this->_writeFds);
 	FD_ZERO(&this->_exceptFds);
-
+	
 	// Server State
 	this->_running = false;
 	this->_initialized = false;
 	this->_shutdownRequested = false;
-
+	
 	// Timing
 	this->_lastCleanup = time(NULL);
 	this->_timeout.tv_sec = _TIMEOUT_SECONDS;
@@ -55,6 +50,7 @@ Server::Server(int port)
 
 	// Connections
 	this->_clients = std::map<int, ClientConnection *>();
+	this->_listeningSockets = std::map<int, const ServerConfig *>();
 }
 
 Server::~Server()
@@ -62,20 +58,15 @@ Server::~Server()
 	std::cout << "\nServer shutting down..." << std::endl;
 	this->stop();
 
+	this->_listeningSockets.clear();
+
 	// Clean up all clients
 	std::map<int, ClientConnection *>::iterator it;
-
 	for (it = this->_clients.begin(); it != this->_clients.end(); it++)
 	{
 		delete it->second;
 	}
-
 	this->_clients.clear();
-
-	if (this->_serverFd >= 0)
-	{
-		close(this->_serverFd);
-	}
 }
 
 // Lifecycle
@@ -85,9 +76,71 @@ bool Server::initialize()
 	signal(SIGTERM, signalHandler);
 	signal(SIGPIPE, SIG_IGN);
 
-	if (!this->createSocket() || !this->bindSocket() || !this->startListening())
+	const std::vector<ServerConfig> & serverConfigs = this->_configManager.getServers();
+	if (serverConfigs.empty()) {
+		logError("No server configurations found.");
+	}
+
+	for (size_t i = 0; i < serverConfigs.size(); i++)
 	{
-		return false;
+		const ServerConfig & currentConfig = serverConfigs[i];
+		int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+		if (listenFd < 0) {
+			logError("Failed to create socket for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
+			return false;
+		}
+
+		// Set socket options for reuse address
+		if (setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &this->_REUSE_ADDR_OPT, sizeof(this->_REUSE_ADDR_OPT)) < 0) {
+			logError("Failed to set SO_REUSEADDR for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
+			close(listenFd);
+			return false;
+		}
+
+		// Set socket to non-blocking
+		if (!this->setNonBlocking(listenFd)) {
+			logError("Failed to set non-blocking for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
+			close(listenFd);
+			return false;
+		}
+
+		struct sockaddr_in serverAddress;
+		memset(&serverAddress, 0, sizeof(serverAddress));
+		serverAddress.sin_family = AF_INET;
+		serverAddress.sin_port = htons(currentConfig.port);
+		
+		// Convert the localhost
+		std::string host;
+		if (currentConfig.host == "localhost")
+			host = "127.0.0.1";
+		else
+			host = currentConfig.host;
+
+		// Convert host string to network address (supports IP and localhost)
+        if (inet_pton(AF_INET, host.c_str(), &serverAddress.sin_addr) <= 0) {
+            logError("Invalid address or address not supported: " + currentConfig.host + ": " + strerror(errno));
+            close(listenFd);
+            return false;
+        }
+
+		// Bind the socket to the address and port
+		if (bind(listenFd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+			logError("Failed to bind socket to " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
+			close(listenFd);
+			return false;
+		}
+
+		// Start listening for incoming connections
+		if (listen(listenFd, this->_MAX_CLIENT_CONN_QUEUE) < 0) {
+			logError("Failed to listen on socket for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
+			close(listenFd);
+			return false;
+		}
+
+		std::cout << "Server listening on " << currentConfig.host << ":" << toString(currentConfig.port) << std::endl;
+		this->_listeningSockets[listenFd] = &currentConfig;
+		FD_SET(listenFd, &this->_readFds);
+		this->_maxFd = std::max(this->_maxFd, listenFd);
 	}
 
 	this->_initialized = true;
@@ -103,33 +156,40 @@ void Server::run()
 	}
 
 	this->_running = true;
-	this->_timeout.tv_sec = 1; // 1 second timeout
+	// _timeout.tv_sec set to 1s in constructor and re-copied in loop for select timeout
 	this->_timeout.tv_usec = 0;
 
 	while (this->_running && !this->_shutdownRequested && !_signalReceived)
 	{
+		// Copy master fd_sets to temporary sets for select()
 		this->setupFdSets();
 
-		int activity = select(this->_maxFd + 1, &this->_readFds, &this->_writeFds, &this->_exceptFds, &this->_timeout);
+		// Use _timeout for select, it will be modified by select() so we reset it each loop
+		struct timeval currentTimeout = this->_timeout;
+		int activity = select(this->_maxFd + 1, &this->_readFds, &this->_writeFds, &this->_exceptFds, &currentTimeout);
+
+		if (_signalReceived) {
+            break; // Exit loop on signal
+        }
 		if (activity < 0)
 		{
 			if (errno == EINTR)
 			{
 				continue; // Interrupted by signal
 			}
-
-			logError("select() failed");
+			logError("select() failed: " + std::string(strerror(errno)));
 			break;
 		}
 
 		if (activity == 0)
 		{
-			// Timed Out
+			// Timed Out - Check for client timeouts
 			this->cleanupTimedOutClients();
 			continue;
 		}
 
-		this->processFdSets(activity);
+		// Process the file descriptors that have activity
+		this->processFdSets();
 		this->processClientRemovalQueue();
 	}
 }
@@ -142,8 +202,12 @@ void Server::stop()
 // Client Management
 bool Server::addClient(int clientFd)
 {
-	// TODO: Check this
+	// ClientConnection constructor takes an int fd
 	this->_clients[clientFd] = new ClientConnection(clientFd);
+	// Update maxFd if necessary
+    if (clientFd > _maxFd) {
+        _maxFd = clientFd;
+    }
 	return true;
 }
 
@@ -161,75 +225,204 @@ void Server::markClientForRemoval(int clientFd)
 }
 
 // Getters
-int Server::getClientCount() const
-{
-	return this->_clients.size();
-}
-bool Server::isRunning() const
-{
-	return this->_running;
-}
-bool Server::isInitialized() const
-{
-	return this->_initialized;
-}
-int Server::getMaxFd() const
-{
-	return this->_maxFd;
-}
+int Server::getClientCount() const { return this->_clients.size(); }
+bool Server::isRunning() const { return this->_running; }
+bool Server::isInitialized() const { return this->_initialized; }
+int Server::getMaxFd() const { return this->_maxFd; }
 
-void Server::setTimeout(int seconds)
-{
-	this->_timeout.tv_sec = seconds;
-}
-void Server::setBufferSize(size_t size)
-{
-	// TODO: Think if necessary
-	(void)size;
-	// this->_BUFFER_SIZE = size;
-}
+void Server::setTimeout(int seconds) { this->_timeout.tv_sec = seconds; }
+void Server::setBufferSize(size_t size) { (void)size; /* TODO: Think if necessary */ }
 
 bool Server::setNonBlocking(int fd)
 {
-	// TODO: Potentially dangerous, not preserving original flags
-	if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags == -1)
 	{
-		logError("Failed to set non-blocking mode");
+		logError("fcntl(F_GETFL) failed for fd " + toString(fd) + ": " + strerror(errno));
+		return false;
+	}
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		logError("fcntl(F_SETFL, O_NONBLOCK) failed for fd " + toString(fd) + ": " + strerror(errno));
 		return false;
 	}
 	return true;
 }
 
-bool Server::createSocket()
+// Connection Management
+void Server::handleNewConnection(int listenFd) // Parameter added
 {
-	// Create Socket
-	this->_serverFd = socket(AF_INET, SOCK_STREAM, 0);
-	if (this->_serverFd == -1)
+	struct sockaddr_in clientAddress;
+	socklen_t clientLen = sizeof(clientAddress);
+	int clientFd = accept(listenFd, (struct sockaddr *)&clientAddress, &clientLen);
+
+	if (clientFd < 0)
 	{
-		logError("Failed to create server socket");
-		return false;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			// No pending connections, just return
+			return;
+		}
+		logError("accept() failed on listenFd " + toString(listenFd) + ": " + strerror(errno));
+		return;
 	}
 
-	// Set Socket Options
-	if (setsockopt(this->_serverFd, SOL_SOCKET, SO_REUSEADDR,
-				   &this->_REUSE_ADDR_OPT, sizeof(this->_REUSE_ADDR_OPT)) < 0)
+	if (!setNonBlocking(clientFd))
 	{
-		logError("Failed to set SO_REUSEADDR");
-		close(this->_serverFd);
-		return false;
+		logError("Failed to set client socket non-blocking for fd " + toString(clientFd));
+		close(clientFd);
+		return;
 	}
 
-	// Set Non-Blocking
-	if (!this->setNonBlocking(this->_serverFd))
-	{
-		close(this->_serverFd);
-		return false;
+	// Add client to master read set
+	FD_SET(clientFd, &_masterReadFds);
+	if (clientFd > _maxFd) {
+		_maxFd = clientFd;
 	}
 
-	this->_maxFd = this->_serverFd;
-	return true;
+	if (!addClient(clientFd)) {
+		logError("Failed to add client " + toString(clientFd));
+		close(clientFd);
+		FD_CLR(clientFd, &_masterReadFds);
+		return;
+	}
+
+	char clientIp[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(clientAddress.sin_addr), clientIp, INET_ADDRSTRLEN);
+	int clientPort = ntohs(clientAddress.sin_port);
+
+	_clients[clientFd]->setClientInfo(clientIp, clientPort);
+
+	std::cout << "New connection accepted on FD " << listenFd << ", client FD: " << clientFd
+			  << " from " << clientIp << ":" << clientPort << std::endl;
 }
 
+void Server::signalHandler(int signal)
+{
+	switch (signal)
+	{
+	case SIGINT:
+	case SIGTERM:
+		_signalReceived = true;
+		break;
+	case SIGPIPE:
+		// Ignore SIGPIPE - we'll handle broken pipes through send/recv return values
+		break;
+	}
+}
+
+void Server::handleClientRead(int clientFd)
+{
+	ClientConnection *client = this->_clients[clientFd];
+	if (!client)
+		return;
+
+	// Read data from the client
+	if (!client->readData()) { // readData now returns false on EOF or real error
+		markClientForRemoval(clientFd); // Client wants to close or error occurred
+		return;
+	}
+
+	// For now, we only handle reading. HTTP processing is for another teammate.
+	// You might want to transition client state based on completion of raw read here.
+	client->setState(CONN_PROCESSING_REQUEST); // Example state change, depends on further logic
+	this->processRequest(clientFd);
+}
+
+void Server::handleClientWrite(int clientFd)
+{
+	ClientConnection *client = this->_clients[clientFd];
+	if (!client)
+		return;
+
+	// Write data to the client
+	if (!client->writeData()) { // writeData now returns false on error
+		markClientForRemoval(clientFd); // Error occurred during write
+		return;
+	}
+
+	// If all data is written, potentially transition state or prepare for next request
+	if (!client->hasDataToWrite()) {
+		// Example: If not keep-alive, close connection, otherwise reset for next request
+		if (!client->isKeepAlive()) {
+			markClientForRemoval(clientFd);
+		} else {
+			// Reset client for next request in keep-alive scenario
+			client->setState(CONN_READING_REQUEST);
+			FD_CLR(clientFd, &_masterWriteFds); // Stop monitoring for write readiness
+			FD_SET(clientFd, &_masterReadFds);  // Start monitoring for read readiness
+		}
+	}
+}
+
+void Server::cleanupTimedOutClients()
+{
+	// time_t currentTime = time(NULL);
+	std::vector<int> timedOutClients;
+
+	for (std::map<int, ClientConnection *>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+	{
+		if (it->second->isTimedOut(_TIMEOUT_SECONDS))
+		{
+			timedOutClients.push_back(it->first);
+		}
+	}
+
+	for (size_t i = 0; i < timedOutClients.size(); ++i)
+	{
+		std::cout << "Client " << timedOutClients[i] << " timed out." << std::endl;
+		markClientForRemoval(timedOutClients[i]);
+	}
+}
+
+void Server::removeClient(int clientFd)
+{
+	std::map<int, ClientConnection *>::iterator it;
+	it = this->_clients.find(clientFd);
+
+	if (it == this->_clients.end())
+		return;
+
+	// Remove from master fd_sets
+    FD_CLR(clientFd, &_masterReadFds);
+    FD_CLR(clientFd, &_masterWriteFds);
+    FD_CLR(clientFd, &_exceptFds); // Also clear from except set if used
+
+	std::cout << "Closing client connection: " << clientFd << std::endl;
+	delete it->second; // Delete the ClientConnection object
+	this->_clients.erase(it); // Remove from map
+	close(clientFd); // Close the socket FD
+}
+
+void Server::logError(const std::string &message)
+{
+	std::cerr << "Error: " << message << std::endl;
+}
+
+void Server::handleSocketError(int clientFd, const std::string &operation)
+{
+	// For now, simply log and mark for removal. More sophisticated error handling can be added.
+	logError("Socket error on FD " + toString(clientFd) + " during " + operation + ": " + strerror(errno));
+	markClientForRemoval(clientFd);
+}
+
+void Server::processClientRemovalQueue()
+{
+	if (this->_clientsToRemove.empty())
+		return;
+
+	// std::cout << "Processing client removal queue... count: " << this->_clientsToRemove.size() << std::endl;
+	for (size_t i = 0; i < this->_clientsToRemove.size(); ++i)
+	{
+		int clientFd = this->_clientsToRemove[i];
+		this->removeClient(clientFd);
+	}
+
+	// Clear the queue after all removals are processed
+	this->_clientsToRemove.clear();
+}
+
+// I/O Multiplexing helpers
 void Server::setupFdSets()
 {
 	// Clear All Sets
@@ -237,9 +430,13 @@ void Server::setupFdSets()
 	FD_ZERO(&this->_writeFds);
 	FD_ZERO(&this->_exceptFds);
 
-	// Always Monitor Server Socket for New Connections
-	FD_SET(this->_serverFd, &this->_readFds);
-	this->_maxFd = this->_serverFd;
+	// Always Monitor Server Sockets for New Connections
+	std::map<int, const ServerConfig *>::iterator sit;
+	for (sit = this->_listeningSockets.begin(); sit != this->_listeningSockets.end(); sit++) {
+		int serverFd = sit->first;
+		FD_SET(serverFd, &this->_readFds);
+		this->_maxFd = serverFd;
+	}
 
 	// Add Client Sockets
 	std::map<int, ClientConnection *>::iterator it;
@@ -264,175 +461,41 @@ void Server::setupFdSets()
 	}
 }
 
-void Server::processFdSets(int activity)
+void Server::processFdSets() // No activity parameter needed
 {
-	// Handle new connections first
-	if (FD_ISSET(this->_serverFd, &this->_readFds))
+	for (int fd = 0; fd <= _maxFd; ++fd)
 	{
-		this->handleNewConnection();
-		activity--;
-	}
-
-	// Handle client sockets
-	std::vector<int> clientFds;
-	std::map<int, ClientConnection *>::const_iterator it;
-
-	for (it = this->_clients.begin(); it != this->_clients.end(); it++)
-	{
-		clientFds.push_back(it->first);
-	}
-
-	for (size_t i = 0; i < clientFds.size(); i++)
-	{
-		int clientFd = clientFds[i];
-		if (activity <= 0)
-			break;
-
-		ClientConnection *client = this->_clients[clientFd];
-		if (!client)
-			continue;
-
-		// Check for exceptions first
-		if (FD_ISSET(clientFd, &this->_exceptFds))
+		// Check for activity on listening sockets
+		if (FD_ISSET(fd, &_readFds))
 		{
-			this->logError("Exception on client socket " + toString(clientFd));
-			this->markClientForRemoval(clientFd);
-			activity--;
-			continue;
+			if (_listeningSockets.count(fd)) // Is it a listening socket?
+			{
+				handleNewConnection(fd);
+				continue; // Move to next FD
+			}
 		}
 
-		// Handle Reads
-		if (FD_ISSET(clientFd, &this->_readFds))
+		// Check for activity on client sockets
+		// Ensure it's a known client AND it's not already marked for removal
+		if (_clients.count(fd))
 		{
-			this->handleClientRead(clientFd);
-			activity--;
-		}
-
-		// Handle Writes
-		if (FD_ISSET(clientFd, &this->_writeFds))
-		{
-			this->handleClientWrite(clientFd);
-			activity--;
-		}
-
-		// Handle Client Closing
-		if (client->shouldClose())
-		{
-			std::cout << "Detected client that needs closing: " << client->getFd() << std::endl;
-			this->_clientsToRemove.push_back(client->getFd());
+			// Check if client needs to be read from
+			if (FD_ISSET(fd, &_readFds) && _clients[fd]->needsRead())
+			{
+				handleClientRead(fd);
+			}
+			// Check if client needs to be written to
+			if (FD_ISSET(fd, &_writeFds) && _clients[fd]->needsWrite())
+			{
+				handleClientWrite(fd);
+			}
 		}
 	}
 }
 
-void Server::handleNewConnection()
+void Server::shutdown()
 {
-	struct sockaddr_in clientAddr;
-	socklen_t clientAddrLen = sizeof(clientAddr);
-
-	int clientFd = accept(this->_serverFd, (struct sockaddr *)&clientAddr, &clientAddrLen);
-
-	if (clientFd < 0)
-	{
-		if (errno != EAGAIN && errno != EWOULDBLOCK)
-		{
-			logError("Accept failed: " + std::string(strerror(errno)));
-		}
-		return;
-	}
-
-	// Set client socket to non blocking
-	if (!this->setNonBlocking(clientFd))
-	{
-		close(clientFd);
-		return;
-	}
-
-	// Create client connection object
-	ClientConnection *client = new ClientConnection(clientFd);
-
-	// Set Client Info
-	char clientIP[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
-	client->setClientInfo(clientIP, ntohs(clientAddr.sin_port));
-
-	// Add to clients map
-	this->_clients[clientFd] = client;
-
-	std::cout << "New client connected: " << clientIP << ":" << ntohs(clientAddr.sin_port) << " (fd=" << clientFd << ")" << std::endl;
-}
-
-void Server::signalHandler(int signal)
-{
-	switch (signal)
-	{
-	case SIGINT:
-	case SIGTERM:
-		_signalReceived = true;
-		break;
-	case SIGPIPE:
-		// Ignore SIGPIPE - we'll handle broken pipes through send/recv return values
-		break;
-	}
-}
-
-void Server::cleanupTimedOutClients()
-{
-	time_t now = time(NULL);
-
-	// Only do cleanup every 30 seconds
-	if (now - this->_lastCleanup < 30)
-	{
-		return;
-	}
-
-	this->_lastCleanup = now;
-
-	std::map<int, ClientConnection *>::iterator it;
-
-	for (it = this->_clients.begin(); it != this->_clients.end();)
-	{
-		ClientConnection *client = it->second;
-
-		if (client->isTimedOut(this->_TIMEOUT_SECONDS) || client->shouldClose())
-		{
-			std::cout << "Removing timed out client: " << it->first << std::endl;
-			delete client;
-			std::map<int, ClientConnection *>::iterator temp = it;
-			++it;
-			this->_clients.erase(temp);
-		}
-		else
-		{
-			++it;
-		}
-	}
-}
-
-bool Server::bindSocket()
-{
-	if (bind(this->_serverFd, (struct sockaddr *)&this->_serverAddress, sizeof(this->_serverAddress)) < 0)
-	{
-		std::cerr << "Bind failed: " << std::string(strerror(errno)) << std::endl;
-		return false;
-	}
-
-	std::cout << "Socket successfully bound to port " << this->_serverPort << "!" << std::endl;
-	return true;
-}
-
-bool Server::startListening()
-{
-	if (listen(this->_serverFd, this->_MAX_CLIENT_CONN_QUEUE) < 0)
-	{
-		std::cerr << "Listen failed" << std::endl;
-		return false;
-	}
-
-	std::cout << "Server is listening on port " << this->_serverPort << "!" << std::endl;
-	// TODO: Rething the localhost, maybe use the IP from the config
-	std::cout << "Try connecting with: curl http://localhost:" << this->_serverPort << std::endl;
-	std::cout << "Press Ctrl+C to stop" << std::endl;
-	return true;
+	this->_shutdownRequested = true;
 }
 
 static std::string createExampleResponse()
@@ -447,81 +510,6 @@ static std::string createExampleResponse()
 	return response;
 }
 
-void Server::handleClientRead(int clientFd)
-{
-	std::cout << "Handling client read for " << clientFd << std::endl;
-
-	ClientConnection *client = this->_clients[clientFd];
-
-	if (!client)
-		return;
-
-	client->readData();
-	client->setState(CONN_PROCESSING_REQUEST);
-	this->processRequest(clientFd);
-}
-
-void Server::handleClientWrite(int clientFd)
-{
-	std::cout << "Handling client write for " << clientFd << std::endl;
-
-	ClientConnection *client = this->_clients[clientFd];
-	client->writeData();
-
-	if (!client)
-		return;
-	if (client->isKeepAlive())
-		client->setState(CONN_KEEP_ALIVE);
-	else
-		client->setState(CONN_CLOSING);
-}
-
-void Server::removeClient(int clientFd)
-{
-	std::map<int, ClientConnection *>::iterator it;
-	it = this->_clients.find(clientFd);
-
-	if (it == this->_clients.end())
-		return;
-
-	std::cout << "Closing client connection: " << clientFd << std::endl;
-	this->_clients.erase(it);
-	delete it->second;
-}
-
-void Server::logError(const std::string &message)
-{
-	std::cout << "Error: " << message << std::endl;
-}
-
-void Server::handleSocketError(int clientFd, const std::string &operation)
-{
-	(void)clientFd;
-	(void)operation;
-
-	std::cout << "ToDO: handleSocketError" << std::endl;
-}
-
-void Server::processClientRemovalQueue()
-{
-	std::cout << "Processing client removal queue..." << std::endl;
-
-	std::cout << "Clients count to remove: " << this->_clientsToRemove.size() << std::endl;
-	for (size_t i = 0; i < this->_clientsToRemove.size(); ++i)
-	{
-		int clientFd = this->_clientsToRemove[i];
-
-		this->removeClient(clientFd);
-	}
-
-	// Clear the queue after all removals are processed
-	this->_clientsToRemove.clear();
-}
-
-void Server::shutdown()
-{
-	this->_shutdownRequested = true;
-}
 
 void Server::processRequest(int clientFd)
 {
