@@ -1,16 +1,55 @@
-#include "Response.hpp"
+#include <Response.hpp>
 
-Response::Response( int socket, int code, const char* fileName) :
-	_socket(socket),
-	_code(code),
-	_fileName(fileName)
+Response::Response( ClientConnection *client ):
+	_code(200),
+	_client(client)
 {
 	std::cout << "Response class created" << std::endl;
+
+	std::string request_str(client->getReadBuffer());
+	std::string cleanRequest = request_str.substr(0, request_str.find("\n"));
+	size_t pos = 0;
+	std::string sub;
+	std::vector<std::string> vectorRequest;
+	while (pos != std::string::npos)
+	{
+		pos = cleanRequest.find('/');
+		sub = cleanRequest.substr(0, pos);
+		vectorRequest.push_back(sub);
+		cleanRequest.erase(0, pos + 1);
+	}
+	std::vector<std::string>::const_iterator const_it = vectorRequest.begin();
+	if (*const_it == "GET " and request_str[4] != ' ')
+	{
+		vectorRequest.erase(vectorRequest.begin());
+		vectorRequest.pop_back();
+		(vectorRequest.back()).erase(((vectorRequest.back()).length() - 5), 5);
+		std::string filename;
+		std::vector<std::string>::const_iterator i = vectorRequest.begin();
+		filename = *i;
+		i++;
+		for ( ; i != vectorRequest.end(); i++)
+		filename += '/' + *i;
+		this->_fileName = filename.c_str();
+		readFile();
+	}
+	else if (*const_it == "POST " and request_str[5] != ' ')
+	{
+		std::cout << "POST" << std::endl;
+	}
+	else if (*const_it == "DELETE " and request_str[7] != ' ')
+	{
+		std::cout << "DELETE" << std::endl;
+	}
+	else
+	{
+		std::cout << "not support" << std::endl;
+	}
 }
 
 Response::Response( const Response& src ) :
-	_socket(src._socket),
 	_code(src._code),
+	_client(src._client),
 	_fileName(src._fileName),
 	_message(src._message),
 	_header(src._header)
@@ -23,8 +62,8 @@ Response& Response::operator=( const Response& src )
 	std::cout << "Response assignation operator called" << std::endl;
 	if (this != &src)
 	{
-		this->_socket = src._socket;
 		this->_code = src._code;
+		this->_client = src._client;
 		this->_fileName = src._fileName;
 		this->_message = src._message;
 		this->_header = src._header;
@@ -35,17 +74,6 @@ Response& Response::operator=( const Response& src )
 Response::~Response()
 {
 	std::cout << "Response class destroyed" << std::endl;
-}
-
-void Response::sendData(size_t len)
-{
-	long bytes_sent = write(this->_socket, this->_header.c_str(), len);
-	if (bytes_sent < 0)
-		std::cerr << "write failed" << std::endl;
-	else if (static_cast<size_t>(bytes_sent) < len)
-		std::cerr << "Warning: Not all data was sent to the client." << std::endl;
-	else
-		std::cout << "Response sent successfully." << std::endl;
 }
 
 void Response::readFile()
@@ -86,8 +114,7 @@ void Response::readFile()
 	close(fd);
 	this->_body = message;
 	setHeader(this->_code);
-	sendData(this->_header.length());
-	std::cout << this->_header << std::endl;
+	this->_client->appendToWriteBuffer(this->_header);
 	delete[] message;
 }
 

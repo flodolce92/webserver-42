@@ -7,6 +7,7 @@
 #include <sys/select.h>
 #include <vector>
 #include <ClientConnection.hpp>
+#include <Response.hpp>
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/errno.h>
@@ -435,17 +436,17 @@ bool Server::startListening()
 	return true;
 }
 
-static std::string createExampleResponse()
-{
-	std::string response = "HTTP/1.1 200 OK\r\n";
-	response += "Content-Type: text/html\r\n";
-	response += "Connection: close\r\n";
-	response += "Content-Length: 12\r\n";
-	response += "\r\n";
-	response += "Hello World!";
+// static std::string createExampleResponse()
+// {
+// 	std::string response = "HTTP/1.1 200 OK\r\n";
+// 	response += "Content-Type: text/html\r\n";
+// 	response += "Connection: close\r\n";
+// 	response += "Content-Length: 12\r\n";
+// 	response += "\r\n";
+// 	response += "Hello World!";
 
-	return response;
-}
+// 	return response;
+// }
 
 void Server::handleClientRead(int clientFd)
 {
@@ -533,6 +534,7 @@ void Server::processRequest(int clientFd)
 	std::cout << "Client " << clientFd << "'s request: " << std::endl;
 	std::cout << client->getReadBuffer() << std::endl;
 	std::cout << "--------------------------" << std::endl;
-	client->appendToWriteBuffer(createExampleResponse());
+	Response response(client);
+
 	client->setState(CONN_WRITING_RESPONSE);
 }
