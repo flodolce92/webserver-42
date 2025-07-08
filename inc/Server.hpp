@@ -8,14 +8,20 @@
 
 class ClientConnection;
 class Buffer;
+class ConfigManager;
+struct ServerConfig; // Forward declare ServerConfig
 
 class Server
 {
-private:
+	private:
+	// Server Config
+	const ConfigManager & _configManager;
+	std::map<int, const ServerConfig *> _listeningSockets; // Map listening FDs to their configs
+
 	// Network Configuration
-	int _serverFd;
-	int _serverPort;
-	struct sockaddr_in _serverAddress;
+	// int _serverFd; // No longer a single serverFd
+	// int _serverPort; // No longer a single serverPort
+	// struct sockaddr_in _serverAddress; // No longer a single serverAddress
 
 	// Static Configuration
 	static const int _REUSE_ADDR_OPT;
@@ -46,31 +52,26 @@ private:
 	static bool _signalReceived;
 	static void signalHandler(int signal);
 
-	// Core Socket Operations
-	bool createSocket();
-	bool setNonBlocking(int fd);
-	bool bindSocket();
-	bool startListening();
-
 	// Connection Management
-	void handleNewConnection();
+	void handleNewConnection(int listenFd); // Modified signature
 	void handleClientRead(int clientFd);
 	void handleClientWrite(int clientFd);
 	void removeClient(int clientFd);
 	void cleanupTimedOutClients();
 	void processClientRemovalQueue();
-	void processRequest(int clientFd);
+	void processRequest(int clientFd); // This method is for HTTP parsing, removed as per request
 
 	// I/O Multiplexing helpers
 	void setupFdSets();
-	void processFdSets(int activity);
+	void processFdSets(); // Modified signature
 
 	// Error Handling
 	void handleSocketError(int clientFd, const std::string &operation);
 	void logError(const std::string &message);
 
+
 public:
-	Server(int port);
+	Server(const ConfigManager & configManager);
 	~Server();
 
 	// Lifecycle
@@ -89,10 +90,9 @@ public:
 	bool isRunning() const;
 	bool isInitialized() const;
 	int getMaxFd() const;
-
-	// Configuration
 	void setTimeout(int seconds);
 	void setBufferSize(size_t size);
+	bool setNonBlocking(int fd); // Moved to public, as it's a utility
 };
 
 #endif
