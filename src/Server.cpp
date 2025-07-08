@@ -137,7 +137,7 @@ bool Server::initialize()
 			return false;
 		}
 
-		std::cout << "Server listening on " << currentConfig.host << ":" << toString(currentConfig.port) << std::endl;
+		std::cout << "Server listening on http://" << currentConfig.host << ":" << toString(currentConfig.port) << std::endl;
 		this->_listeningSockets[listenFd] = &currentConfig;
 		FD_SET(listenFd, &this->_readFds);
 		this->_maxFd = std::max(this->_maxFd, listenFd);

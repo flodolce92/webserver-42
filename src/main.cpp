@@ -15,8 +15,7 @@ int main(int argc, char *argv[])
 			configManager.printConfiguration();
 			std::cout << std::endl;
 
-			// Server sv = Server(configManager.getServers().at(0).port); // OLD: Initializes only one port
-			Server sv = Server(configManager); // NEW: Initializes with the full ConfigManager
+			Server sv = Server(configManager);
 			sv.initialize();
 			sv.run();
 		}
