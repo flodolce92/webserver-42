@@ -24,7 +24,6 @@ struct Route
 	std::string redirect;
 	std::string root;
 	bool directory_listing;
-	std::string index;
 	std::vector<std::string> index_files;
 	std::string cgi_extension;
 	std::string cgi_path;

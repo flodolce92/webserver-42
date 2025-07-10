@@ -11,7 +11,6 @@ Route::Route()
 	  redirect(""),
 	  root(""),
 	  directory_listing(false),
-	  index(""),
 	  index_files(),
 	  cgi_extension(""),
 	  cgi_path(""),
@@ -425,10 +424,7 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		state.index_found = true;
 		std::vector<std::string> index_files = split(value, ' ');
 		if (!index_files.empty())
-		{
-			route.index = index_files[0];
 			route.index_files = index_files;
-		}
 	}
 	else if (directive == "cgi_extension")
 	{
@@ -633,10 +629,6 @@ void ConfigParser::printConfig(const Config &config) const
 			if (!route.root.empty())
 			{
 				std::cout << "      Root: " << route.root << "\n";
-			}
-			if (!route.index.empty())
-			{
-				std::cout << "      Main Index File: " << route.index << "\n";
 			}
 			if (!route.index_files.empty())
 			{
