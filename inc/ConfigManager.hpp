@@ -34,7 +34,6 @@ public:
 
 	// Debug methods
 	void printConfiguration() const;
-	void validateConfiguration() const;
 };
 
 std::string normalizePath(const std::string &path);

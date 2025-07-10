@@ -7,7 +7,6 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <algorithm>
 #include <cstdlib>
 
 // Forward declarations
@@ -64,6 +63,29 @@ private:
 	size_t pos;
 	size_t line_num;
 
+	// State for parsing server directives
+	struct ServerParseState
+	{
+		bool listen_found;
+		bool client_max_body_size_found;
+
+		ServerParseState();
+	};
+
+	// State for parsing location directives
+	struct LocationParseState
+	{
+		bool root_found;
+		bool return_found;
+		bool autoindex_found;
+		bool index_found;
+		bool cgi_extension_found;
+		bool cgi_path_found;
+		bool upload_path_found;
+
+		LocationParseState();
+	};
+
 	// Helper methods
 	void skipWhitespace();
 	void skipComments();
@@ -76,8 +98,8 @@ private:
 	Config parseConfig();
 	ServerConfig parseServer();
 	Route parseLocation();
-	void parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value);
-	void parseLocationDirective(Route &route, const std::string &directive, const std::string &value);
+	void parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value, ServerParseState &state);
+	void parseLocationDirective(Route &route, const std::string &directive, const std::string &value, LocationParseState &state);
 
 	// Validation methods
 	void validateConfig(const Config &config) const;

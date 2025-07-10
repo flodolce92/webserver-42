@@ -1,5 +1,6 @@
 #include <ConfigParser.hpp>
 #include <cctype>
+#include <sys/stat.h>
 
 // Route
 Route::Route()
@@ -27,6 +28,25 @@ ServerConfig::ServerConfig()
 	  error_pages(),
 	  client_max_body_size(1048576),
 	  routes()
+{
+}
+
+// ServerParseState
+ConfigParser::ServerParseState::ServerParseState()
+	: listen_found(false),
+	  client_max_body_size_found(false)
+{
+}
+
+// LocationParseState
+ConfigParser::LocationParseState::LocationParseState()
+	: root_found(false),
+	  return_found(false),
+	  autoindex_found(false),
+	  index_found(false),
+	  cgi_extension_found(false),
+	  cgi_path_found(false),
+	  upload_path_found(false)
 {
 }
 
@@ -174,6 +194,7 @@ Config ConfigParser::parseConfig()
 ServerConfig ConfigParser::parseServer()
 {
 	ServerConfig server;
+	ServerParseState state;
 
 	skipWhitespace();
 	if (isAtEnd() || content[pos] != '{')
@@ -206,22 +227,36 @@ ServerConfig ConfigParser::parseServer()
 				value = getRestOfLine();
 			else
 				value = getNextToken();
-			parseServerDirective(server, directive, value);
+
+			if (value.empty())
+				throwError("Missing value for directive: " + directive);
+
+			parseServerDirective(server, directive, value, state);
+
 			skipWhitespace();
 			if (!isAtEnd() && content[pos] == ';')
 				pos++;
+			else if (!isAtEnd() && content[pos] != '{')
+				throwError("Expected ';' or '{' after directive: " + directive);
 		}
 	}
+
+	// Check for mandatory directives
+	if (!state.listen_found)
+		throwError("Mandatory 'listen' directive is missing in server block");
+
 	return server;
 }
 
 Route ConfigParser::parseLocation()
 {
 	Route route;
+	LocationParseState state;
+
 	route.path = getNextToken();
 
-	if (route.path.empty())
-		throwError("Location path cannot be empty");
+	if (route.path.empty() || route.path[0] != '/')
+		throwError("Location path must start with '/'");
 
 	skipWhitespace();
 	if (isAtEnd() || content[pos] != '{')
@@ -250,18 +285,55 @@ Route ConfigParser::parseLocation()
 			value = getRestOfLine();
 		else
 			value = getNextToken();
-		parseLocationDirective(route, directive, value);
+
+		if (value.empty())
+			throwError("Missing value for directive: " + directive);
+
+		parseLocationDirective(route, directive, value, state);
+
 		skipWhitespace();
 		if (!isAtEnd() && content[pos] == ';')
 			pos++;
+		else if (!isAtEnd() && content[pos] != '{')
+			throwError("Expected ';' or '{' after directive: " + directive);
 	}
+
+	// Logical validation after parsing the block
+	if (!state.root_found && !state.return_found && !state.cgi_path_found)
+		throwError("Location block for path '" + route.path + "' must have a 'root', 'return', or 'cgi_path' directive.");
+
+	if (state.cgi_extension_found && !state.cgi_path_found)
+		throwError("'cgi_extension' is set without a 'cgi_path' in location '" + route.path + "'");
+
+	if (state.cgi_path_found && !state.cgi_extension_found)
+		throwError("'cgi_path' is set without a 'cgi_extension' in location '" + route.path + "'");
+
+	if (state.upload_path_found)
+	{
+		std::vector<std::string> methods = route.allowed_methods;
+		bool post_found = false;
+		for (size_t i = 0; i < methods.size(); ++i)
+		{
+			if (methods[i] == "POST")
+			{
+				post_found = true;
+				break;
+			}
+		}
+		if (!post_found)
+			throwError("'upload_path' is set, but 'POST' method is not specified in 'allow_methods' for location '" + route.path + "'");
+	}
+
 	return route;
 }
 
-void ConfigParser::parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value)
+void ConfigParser::parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value, ServerParseState &state)
 {
 	if (directive == "listen")
 	{
+		if (state.listen_found)
+			throwError("Duplicate 'listen' directive");
+		state.listen_found = true;
 		size_t colon_pos = value.find(':');
 		if (colon_pos != std::string::npos)
 		{
@@ -288,16 +360,21 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 					server.error_pages[error_code] = page_path;
 			}
 		}
+		else
+			throwError("Invalid 'error_page' format. Expected at least one code and a path.");
 	}
 	else if (directive == "client_max_body_size")
 	{
+		if (state.client_max_body_size_found)
+			throwError("Duplicate 'client_max_body_size' directive");
+		state.client_max_body_size_found = true;
 		server.client_max_body_size = parseSize(value);
 	}
 	else
 		throwError("Unknown server directive: " + directive);
 }
 
-void ConfigParser::parseLocationDirective(Route &route, const std::string &directive, const std::string &value)
+void ConfigParser::parseLocationDirective(Route &route, const std::string &directive, const std::string &value, LocationParseState &state)
 {
 	if (directive == "allow_methods")
 	{
@@ -305,6 +382,12 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 	}
 	else if (directive == "return")
 	{
+		if (state.return_found)
+			throwError("Duplicate 'return' directive");
+		if (state.root_found)
+			throwError("'return' directive conflicts with 'root'");
+		state.return_found = true;
+
 		std::vector<std::string> parts = split(value, ' ');
 		if (parts.size() == 2)
 		{
@@ -313,7 +396,7 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		}
 		else if (parts.size() == 1)
 		{
-			route.redirect_code = 302;
+			route.redirect_code = 302; // Default redirect
 			route.redirect_url = parts[0];
 		}
 		else
@@ -321,14 +404,25 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 	}
 	else if (directive == "root")
 	{
+		if (state.root_found)
+			throwError("Duplicate 'root' directive");
+		if (state.return_found)
+			throwError("'root' directive conflicts with 'return'");
+		state.root_found = true;
 		route.root = value;
 	}
 	else if (directive == "autoindex")
 	{
+		if (state.autoindex_found)
+			throwError("Duplicate 'autoindex' directive");
+		state.autoindex_found = true;
 		route.directory_listing = (value == "on");
 	}
 	else if (directive == "index")
 	{
+		if (state.index_found)
+			throwError("Duplicate 'index' directive");
+		state.index_found = true;
 		std::vector<std::string> index_files = split(value, ' ');
 		if (!index_files.empty())
 		{
@@ -338,14 +432,23 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 	}
 	else if (directive == "cgi_extension")
 	{
+		if (state.cgi_extension_found)
+			throwError("Duplicate 'cgi_extension' directive");
+		state.cgi_extension_found = true;
 		route.cgi_extension = value;
 	}
 	else if (directive == "cgi_path")
 	{
+		if (state.cgi_path_found)
+			throwError("Duplicate 'cgi_path' directive");
+		state.cgi_path_found = true;
 		route.cgi_path = value;
 	}
 	else if (directive == "upload_path")
 	{
+		if (state.upload_path_found)
+			throwError("Duplicate 'upload_path' directive");
+		state.upload_path_found = true;
 		route.upload_path = value;
 		route.upload_enabled = true;
 	}
@@ -412,13 +515,35 @@ size_t ConfigParser::parseSize(const std::string &sizeStr) const
 		multiplier = 1024 * 1024 * 1024;
 		numStr = sizeStr.substr(0, sizeStr.length() - 1);
 	}
-	return std::atoi(numStr.c_str()) * multiplier;
+
+	for (size_t i = 0; i < numStr.length(); ++i)
+	{
+		if (!std::isdigit(numStr[i]))
+			throwError("Invalid size format: " + sizeStr);
+	}
+
+	long long value = std::atoll(numStr.c_str());
+	if (value <= 0)
+		throwError("Size must be a positive value: " + sizeStr);
+
+	return value * multiplier;
 }
 
 void ConfigParser::validateConfig(const Config &config) const
 {
 	for (size_t i = 0; i < config.servers.size(); ++i)
 	{
+		// Check for duplicate server blocks (same host and port)
+		for (size_t j = i + 1; j < config.servers.size(); ++j)
+		{
+			const ServerConfig &other = config.servers[j];
+			if (config.servers[i].host == other.host && config.servers[i].port == other.port)
+			{
+				std::ostringstream oss;
+				oss << "Duplicate server block for " << config.servers[i].host << ":" << config.servers[i].port;
+				throwError(oss.str());
+			}
+		}
 		validateServer(config.servers[i]);
 	}
 }
@@ -443,6 +568,19 @@ void ConfigParser::validateRoute(const Route &route) const
 	{
 		if (!isValidMethod(route.allowed_methods[i]))
 			throwError("Invalid HTTP method: " + route.allowed_methods[i]);
+	}
+
+	if (!route.cgi_path.empty())
+	{
+		struct stat st;
+		if (stat(route.cgi_path.c_str(), &st) != 0)
+		{
+			throwError("CGI path does not exist: " + route.cgi_path);
+		}
+		if (!(st.st_mode & S_IXUSR))
+		{
+			throwError("CGI path is not executable: " + route.cgi_path);
+		}
 	}
 }
 
