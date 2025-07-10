@@ -10,7 +10,7 @@ Route::Route()
 	  redirect_url(""),
 	  redirect(""),
 	  root(""),
-	  directory_listing(false),
+	  autoindex(false),
 	  index_files(),
 	  cgi_extension(""),
 	  cgi_path(""),
@@ -29,7 +29,7 @@ ServerConfig::ServerConfig()
 	  routes(),
 	  root(""),
 	  index_files(),
-	  directory_listing(false),
+	  autoindex(false),
 	  allowed_methods()
 {
 }
@@ -263,7 +263,7 @@ Route ConfigParser::parseLocation(const ServerConfig &server)
 	// Inherit server directives
 	route.root = server.root;
 	route.index_files = server.index_files;
-	route.directory_listing = server.directory_listing;
+	route.autoindex = server.autoindex;
 	route.allowed_methods = server.allowed_methods;
 
 	route.path = getNextToken();
@@ -346,7 +346,7 @@ Route ConfigParser::parseLocation(const ServerConfig &server)
 
 		route.root.clear();
 		route.index_files.clear();
-		route.directory_listing = false;
+		route.autoindex = false;
 	}
 
 	return route;
@@ -416,7 +416,7 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 		if (state.autoindex_found)
 			throwError("Duplicate 'autoindex' directive");
 		state.autoindex_found = true;
-		server.directory_listing = (value == "on");
+		server.autoindex = (value == "on");
 	}
 	else if (directive == "allow_methods")
 	{
@@ -484,7 +484,7 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		if (state.autoindex_found)
 			throwError("Duplicate 'autoindex' directive");
 		state.autoindex_found = true;
-		route.directory_listing = (value == "on");
+		route.autoindex = (value == "on");
 	}
 	else if (directive == "index")
 	{
@@ -710,9 +710,9 @@ void ConfigParser::printConfig(const Config &config) const
 				}
 				std::cout << "\n";
 			}
-			if (route.directory_listing)
+			if (route.autoindex)
 			{
-				std::cout << "      Directory Listing: ON\n";
+				std::cout << "      Autoindex: ON\n";
 			}
 			if (!route.redirect_url.empty())
 			{

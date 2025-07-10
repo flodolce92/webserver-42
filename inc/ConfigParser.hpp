@@ -23,7 +23,7 @@ struct Route
 	std::string redirect_url;
 	std::string redirect;
 	std::string root;
-	bool directory_listing;
+	bool autoindex;
 	std::vector<std::string> index_files;
 	std::string cgi_extension;
 	std::string cgi_path;
@@ -46,7 +46,7 @@ struct ServerConfig
 	// Direttive ereditabili
 	std::string root;
 	std::vector<std::string> index_files;
-	bool directory_listing;
+	bool autoindex;
 	std::vector<std::string> allowed_methods;
 
 	ServerConfig();
