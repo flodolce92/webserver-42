@@ -4,6 +4,37 @@
 #include <algorithm>
 #include <sys/stat.h>
 
+const Route *ServerConfig::findMatchingRoute(const std::string &requestPath) const
+{
+	const Route *bestMatch = NULL;
+	size_t longestMatchLength = 0;
+
+	for (size_t i = 0; i < routes.size(); ++i)
+	{
+		const Route &currentRoute = routes[i];
+		std::string normRequestPath = normalizePath(requestPath);
+		std::string normCurrRoutePath = normalizePath(currentRoute.path);
+
+		if (normRequestPath.rfind(normCurrRoutePath, 0) == 0)
+		{
+			bool isExactMatch = (normCurrRoutePath == normRequestPath);
+			bool isDirectoryMatch = (normRequestPath.length() > normCurrRoutePath.length() &&
+									 normRequestPath[normCurrRoutePath.length()] == '/');
+			bool isRootMatch = (normCurrRoutePath == "/" && normRequestPath.rfind("/", 0) == 0);
+
+			if (isExactMatch || isDirectoryMatch || isRootMatch)
+			{
+				if (normCurrRoutePath.length() > longestMatchLength)
+				{
+					longestMatchLength = normCurrRoutePath.length();
+					bestMatch = &currentRoute;
+				}
+			}
+		}
+	}
+	return bestMatch;
+}
+
 ConfigManager::ConfigManager() : is_loaded(false), config_file_path("") {}
 
 ConfigManager::~ConfigManager() {}
@@ -99,17 +130,6 @@ const ServerConfig *ConfigManager::findServerByName(const std::string &server_na
 	return matching_servers.empty() ? NULL : matching_servers[0];
 }
 
-const Route *ConfigManager::findRoute(const ServerConfig &server, const std::string &path) const
-{
-	for (size_t i = 0; i < server.routes.size(); ++i)
-	{
-		const Route &route = server.routes[i];
-		if (pathMatches(route.path, path))
-			return &route;
-	}
-	return NULL;
-}
-
 bool ConfigManager::isMethodAllowed(const Route &route, const std::string &method) const
 {
 	if (route.allowed_methods.empty())
@@ -203,8 +223,8 @@ void ConfigManager::validateConfiguration() const
 	}
 }
 
-// Private helper methods
-std::string ConfigManager::normalizePath(const std::string &path) const
+// Utility function to normalize paths
+std::string normalizePath(const std::string &path)
 {
 	if (path.empty())
 		return "/";
@@ -218,20 +238,4 @@ std::string ConfigManager::normalizePath(const std::string &path) const
 		normalized = normalized.substr(0, normalized.length() - 1);
 
 	return normalized;
-}
-
-bool ConfigManager::pathMatches(const std::string &route_path, const std::string &request_path) const
-{
-	std::string normalized_route = normalizePath(route_path);
-	std::string normalized_request = normalizePath(request_path);
-
-	// Exact match
-	if (normalized_route == normalized_request)
-		return true;
-
-	// Prefix match (route is a prefix of request)
-	if (normalized_request.find(normalized_route) == 0)
-		return normalized_request[normalized_route.length()] == '/';
-
-	return false;
 }

@@ -14,10 +14,6 @@ private:
 	bool is_loaded;
 	std::string config_file_path;
 
-	// Helper methods
-	std::string normalizePath(const std::string &path) const;
-	bool pathMatches(const std::string &route_path, const std::string &request_path) const;
-
 public:
 	ConfigManager();
 	~ConfigManager();
@@ -31,9 +27,6 @@ public:
 	const ServerConfig *findServer(const std::string &host, int port) const;
 	const ServerConfig *findServerByName(const std::string &server_name, const std::string &host, int port) const;
 
-	// Route matching
-	const Route *findRoute(const ServerConfig &server, const std::string &path) const;
-
 	// Utility methods
 	bool isMethodAllowed(const Route &route, const std::string &method) const;
 	std::string resolveFilePath(const Route &route, const std::string &request_path) const;
@@ -43,5 +36,7 @@ public:
 	void printConfiguration() const;
 	void validateConfiguration() const;
 };
+
+std::string normalizePath(const std::string &path);
 
 #endif
