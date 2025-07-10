@@ -26,14 +26,21 @@ ServerConfig::ServerConfig()
 	  server_names(),
 	  error_pages(),
 	  client_max_body_size(1048576),
-	  routes()
+	  routes(),
+	  root(""),
+	  index_files(),
+	  directory_listing(false),
+	  allowed_methods()
 {
 }
 
 // ServerParseState
 ConfigParser::ServerParseState::ServerParseState()
 	: listen_found(false),
-	  client_max_body_size_found(false)
+	  client_max_body_size_found(false),
+	  root_found(false),
+	  index_found(false),
+	  autoindex_found(false)
 {
 }
 
@@ -218,11 +225,12 @@ ServerConfig ConfigParser::parseServer()
 			throwError("Empty directive");
 
 		if (directive == "location")
-			server.routes.push_back(parseLocation());
+			server.routes.push_back(parseLocation(server));
 		else
 		{
 			std::string value;
-			if (directive == "server_name" || directive == "error_page")
+			if (directive == "server_name" || directive == "error_page" ||
+				directive == "allow_methods" || directive == "index")
 				value = getRestOfLine();
 			else
 				value = getNextToken();
@@ -247,10 +255,16 @@ ServerConfig ConfigParser::parseServer()
 	return server;
 }
 
-Route ConfigParser::parseLocation()
+Route ConfigParser::parseLocation(const ServerConfig &server)
 {
 	Route route;
 	LocationParseState state;
+
+	// Inherit server directives
+	route.root = server.root;
+	route.index_files = server.index_files;
+	route.directory_listing = server.directory_listing;
+	route.allowed_methods = server.allowed_methods;
 
 	route.path = getNextToken();
 
@@ -298,7 +312,7 @@ Route ConfigParser::parseLocation()
 	}
 
 	// Logical validation after parsing the block
-	if (!state.root_found && !state.return_found && !state.cgi_path_found)
+	if (route.root.empty() && !state.return_found && !state.cgi_path_found)
 		throwError("Location block for path '" + route.path + "' must have a 'root', 'return', or 'cgi_path' directive.");
 
 	if (state.cgi_extension_found && !state.cgi_path_found)
@@ -321,6 +335,18 @@ Route ConfigParser::parseLocation()
 		}
 		if (!post_found)
 			throwError("'upload_path' is set, but 'POST' method is not specified in 'allow_methods' for location '" + route.path + "'");
+	}
+
+	if (state.return_found)
+	{
+		if (route.redirect_code < 300 || route.redirect_code >= 400)
+			throwError("Invalid redirect code in 'return' directive for location '" + route.path + "'. Must be a 3xx code.");
+		if (route.redirect_url.empty())
+			throwError("'return' directive must specify a URL for location '" + route.path + "'");
+
+		route.root.clear();
+		route.index_files.clear();
+		route.directory_listing = false;
 	}
 
 	return route;
@@ -369,6 +395,38 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 		state.client_max_body_size_found = true;
 		server.client_max_body_size = parseSize(value);
 	}
+	else if (directive == "root")
+	{
+		if (state.root_found)
+			throwError("Duplicate 'root' directive");
+		state.root_found = true;
+		server.root = value;
+	}
+	else if (directive == "index")
+	{
+		if (state.index_found)
+			throwError("Duplicate 'index' directive");
+		state.index_found = true;
+		server.index_files = split(value, ' ');
+		if (server.index_files.empty())
+			throwError("'index' directive must specify at least one file");
+	}
+	else if (directive == "autoindex")
+	{
+		if (state.autoindex_found)
+			throwError("Duplicate 'autoindex' directive");
+		state.autoindex_found = true;
+		server.directory_listing = (value == "on");
+	}
+	else if (directive == "allow_methods")
+	{
+		server.allowed_methods = split(value, ' ');
+		for (size_t i = 0; i < server.allowed_methods.size(); ++i)
+		{
+			if (!isValidMethod(server.allowed_methods[i]))
+				throwError("Invalid HTTP method: " + server.allowed_methods[i]);
+		}
+	}
 	else
 		throwError("Unknown server directive: " + directive);
 }
@@ -378,6 +436,11 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 	if (directive == "allow_methods")
 	{
 		route.allowed_methods = split(value, ' ');
+		for (size_t i = 0; i < route.allowed_methods.size(); ++i)
+		{
+			if (!isValidMethod(route.allowed_methods[i]))
+				throwError("Invalid HTTP method: " + route.allowed_methods[i]);
+		}
 	}
 	else if (directive == "return")
 	{
@@ -396,7 +459,13 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		else if (parts.size() == 1)
 		{
 			route.redirect_code = 302; // Default redirect
-			route.redirect_url = parts[0];
+			if (parts[0].find("http://") == 0 || parts[0].find("https://") == 0 ||
+				parts[0].find("/") == 0)
+			{
+				route.redirect_url = parts[0];
+			}
+			else
+				throwError("Invalid return directive format, expected 'code url' or 'url'");
 		}
 		else
 			throwError("Invalid return directive format");
@@ -422,9 +491,9 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		if (state.index_found)
 			throwError("Duplicate 'index' directive");
 		state.index_found = true;
-		std::vector<std::string> index_files = split(value, ' ');
-		if (!index_files.empty())
-			route.index_files = index_files;
+		route.index_files = split(value, ' ');
+		if (route.index_files.empty())
+			throwError("'index' directive must specify at least one file");
 	}
 	else if (directive == "cgi_extension")
 	{

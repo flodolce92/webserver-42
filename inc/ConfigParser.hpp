@@ -43,6 +43,12 @@ struct ServerConfig
 	size_t client_max_body_size;
 	std::vector<Route> routes;
 
+	// Direttive ereditabili
+	std::string root;
+	std::vector<std::string> index_files;
+	bool directory_listing;
+	std::vector<std::string> allowed_methods;
+
 	ServerConfig();
 	const Route *findMatchingRoute(const std::string &requestPath) const;
 };
@@ -67,6 +73,9 @@ private:
 	{
 		bool listen_found;
 		bool client_max_body_size_found;
+		bool root_found;
+		bool index_found;
+		bool autoindex_found;
 
 		ServerParseState();
 	};
@@ -96,7 +105,7 @@ private:
 	// Parsing methods
 	Config parseConfig();
 	ServerConfig parseServer();
-	Route parseLocation();
+	Route parseLocation(const ServerConfig &server);
 	void parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value, ServerParseState &state);
 	void parseLocationDirective(Route &route, const std::string &directive, const std::string &value, LocationParseState &state);
 
