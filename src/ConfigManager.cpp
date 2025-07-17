@@ -1,7 +1,6 @@
 #include <ConfigManager.hpp>
 #include <iostream>
 #include <stdexcept>
-#include <algorithm>
 #include <sys/stat.h>
 
 const Route *ServerConfig::findMatchingRoute(const std::string &requestPath) const
@@ -17,10 +16,11 @@ const Route *ServerConfig::findMatchingRoute(const std::string &requestPath) con
 
 		if (normRequestPath.rfind(normCurrRoutePath, 0) == 0)
 		{
-			bool isExactMatch = (normCurrRoutePath == normRequestPath);
-			bool isDirectoryMatch = (normRequestPath.length() > normCurrRoutePath.length() &&
+			bool isExactMatch = (normCurrRoutePath.length() == normRequestPath.length());
+			bool isDirectoryMatch = !isExactMatch &&
+									(normRequestPath.length() > normCurrRoutePath.length() &&
 									 normRequestPath[normCurrRoutePath.length()] == '/');
-			bool isRootMatch = (normCurrRoutePath == "/" && normRequestPath.rfind("/", 0) == 0);
+			bool isRootMatch = (normCurrRoutePath == "/");
 
 			if (isExactMatch || isDirectoryMatch || isRootMatch)
 			{
@@ -41,18 +41,10 @@ ConfigManager::~ConfigManager() {}
 
 void ConfigManager::loadConfig(const std::string &filename)
 {
-	try
-	{
-		config = parser.parseFile(filename);
-		config_file_path = filename;
-		is_loaded = true;
-		std::cout << "Configuration loaded successfully from: " << filename << std::endl;
-	}
-	catch (const std::exception &e)
-	{
-		std::cerr << "Failed to load configuration: " << e.what() << std::endl;
-		throw;
-	}
+	config = parser.parseFile(filename);
+	config_file_path = filename;
+	is_loaded = true;
+	std::cout << "Configuration loaded and validated successfully from: " << filename << std::endl;
 }
 
 bool ConfigManager::isLoaded() const
@@ -80,7 +72,15 @@ const ServerConfig *ConfigManager::findServer(const std::string &host, int port)
 			return &server;
 	}
 
-	// Second pass: port match with any host
+	// Second pass: port match with any host ("0.0.0.0" or wildcard)
+	for (size_t i = 0; i < config.servers.size(); ++i)
+	{
+		const ServerConfig &server = config.servers[i];
+		if (server.port == port && (server.host == "0.0.0.0" || server.host == "*"))
+			return &server;
+	}
+
+	// Fallback to first server on that port (default)
 	for (size_t i = 0; i < config.servers.size(); ++i)
 	{
 		const ServerConfig &server = config.servers[i];
@@ -96,12 +96,15 @@ const ServerConfig *ConfigManager::findServerByName(const std::string &server_na
 	if (!is_loaded)
 		return NULL;
 
+	if (server_name.empty())
+		return findServer(host, port);
+
 	// First, find servers matching host:port
 	std::vector<const ServerConfig *> matching_servers;
 	for (size_t i = 0; i < config.servers.size(); ++i)
 	{
 		const ServerConfig &server = config.servers[i];
-		if (server.host == host && server.port == port)
+		if ((server.host == host || server.host == "0.0.0.0" || server.host == "*") && server.port == port)
 			matching_servers.push_back(&server);
 	}
 
@@ -116,7 +119,10 @@ const ServerConfig *ConfigManager::findServerByName(const std::string &server_na
 		}
 	}
 
-	// Now find server with matching server_name
+	if (matching_servers.empty())
+		return NULL;
+
+	// Now find server with matching server_name from the candidates
 	for (size_t i = 0; i < matching_servers.size(); ++i)
 	{
 		const ServerConfig *server = matching_servers[i];
@@ -127,13 +133,15 @@ const ServerConfig *ConfigManager::findServerByName(const std::string &server_na
 		}
 	}
 
-	return matching_servers.empty() ? NULL : matching_servers[0];
+	// If no name matches, return the first server from the candidates as default
+	return matching_servers[0];
 }
 
 bool ConfigManager::isMethodAllowed(const Route &route, const std::string &method) const
 {
+	// If allow_methods is empty, all mandatory methods are allowed.
 	if (route.allowed_methods.empty())
-		return true;
+		return (method == "GET" || method == "POST" || method == "DELETE");
 
 	for (size_t i = 0; i < route.allowed_methods.size(); ++i)
 	{
@@ -145,30 +153,34 @@ bool ConfigManager::isMethodAllowed(const Route &route, const std::string &metho
 
 std::string ConfigManager::resolveFilePath(const Route &route, const std::string &request_path) const
 {
-	std::string normalized_request = normalizePath(request_path);
-	std::string normalized_route = normalizePath(route.path);
+	// Ensure root path ends with a slash for correct concatenation
+	std::string root_path = route.root;
+	if (!root_path.empty() && root_path[root_path.length() - 1] != '/')
+		root_path += '/';
 
-	// Remove route prefix from request path
+	// Ensure route path starts with a slash
+	std::string route_path = normalizePath(route.path);
+
+	// Get the part of the request path that comes after the location's path
 	std::string relative_path;
-	if (normalized_request.find(normalized_route) == 0)
+	if (request_path.find(route_path) == 0)
 	{
-		relative_path = normalized_request.substr(normalized_route.length());
-		if (!relative_path.empty() && relative_path[0] == '/')
-			relative_path = relative_path.substr(1);
+		if (route_path == "/")
+			relative_path = request_path.substr(1);
+		else
+			relative_path = request_path.substr(route_path.length());
 	}
 
-	// Combine with root directory
-	std::string full_path = route.root;
-	if (!full_path.empty() && full_path[full_path.length() - 1] != '/')
-		full_path += '/';
-	full_path += relative_path;
+	// Remove leading slash from relative_path if it exists
+	if (!relative_path.empty() && relative_path[0] == '/')
+		relative_path = relative_path.substr(1);
 
-	return full_path;
+	return root_path + relative_path;
 }
 
 bool ConfigManager::isCGIRequest(const Route &route, const std::string &file_path) const
 {
-	if (route.cgi_extension.empty())
+	if (route.cgi_extension.empty() || route.cgi_path.empty())
 		return false;
 
 	size_t dot_pos = file_path.find_last_of('.');
@@ -189,40 +201,6 @@ void ConfigManager::printConfiguration() const
 	parser.printConfig(config);
 }
 
-void ConfigManager::validateConfiguration() const
-{
-	if (!is_loaded)
-		throw std::runtime_error("Configuration not loaded");
-
-	// Additional validation
-	for (size_t i = 0; i < config.servers.size(); ++i)
-	{
-		const ServerConfig &server = config.servers[i];
-
-		// Check for duplicate server blocks
-		for (size_t j = i + 1; j < config.servers.size(); ++j)
-		{
-			const ServerConfig &other = config.servers[j];
-			if (server.host == other.host && server.port == other.port)
-				std::cerr << "Warning: Duplicate server block for " << server.host << ":" << server.port << std::endl;
-		}
-
-		// Validate routes
-		for (size_t j = 0; j < server.routes.size(); ++j)
-		{
-			const Route &route = server.routes[j];
-
-			// Check if CGI path exists when CGI is configured
-			if (!route.cgi_extension.empty() && !route.cgi_path.empty())
-			{
-				struct stat st;
-				if (stat(route.cgi_path.c_str(), &st) != 0)
-					std::cerr << "Warning: CGI path does not exist: " << route.cgi_path << std::endl;
-			}
-		}
-	}
-}
-
 // Utility function to normalize paths
 std::string normalizePath(const std::string &path)
 {
@@ -230,8 +208,6 @@ std::string normalizePath(const std::string &path)
 		return "/";
 
 	std::string normalized = path;
-	if (normalized[0] != '/')
-		normalized = "/" + normalized;
 
 	// Remove trailing slash except for root
 	if (normalized.length() > 1 && normalized[normalized.length() - 1] == '/')

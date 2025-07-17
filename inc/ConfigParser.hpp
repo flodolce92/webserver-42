@@ -7,7 +7,6 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <algorithm>
 #include <cstdlib>
 
 // Forward declarations
@@ -24,8 +23,7 @@ struct Route
 	std::string redirect_url;
 	std::string redirect;
 	std::string root;
-	bool directory_listing;
-	std::string index;
+	bool autoindex;
 	std::vector<std::string> index_files;
 	std::string cgi_extension;
 	std::string cgi_path;
@@ -44,6 +42,12 @@ struct ServerConfig
 	std::map<int, std::string> error_pages;
 	size_t client_max_body_size;
 	std::vector<Route> routes;
+
+	// Direttive ereditabili
+	std::string root;
+	std::vector<std::string> index_files;
+	bool autoindex;
+	std::vector<std::string> allowed_methods;
 
 	ServerConfig();
 	const Route *findMatchingRoute(const std::string &requestPath) const;
@@ -64,6 +68,32 @@ private:
 	size_t pos;
 	size_t line_num;
 
+	// State for parsing server directives
+	struct ServerParseState
+	{
+		bool listen_found;
+		bool client_max_body_size_found;
+		bool root_found;
+		bool index_found;
+		bool autoindex_found;
+
+		ServerParseState();
+	};
+
+	// State for parsing location directives
+	struct LocationParseState
+	{
+		bool root_found;
+		bool return_found;
+		bool autoindex_found;
+		bool index_found;
+		bool cgi_extension_found;
+		bool cgi_path_found;
+		bool upload_path_found;
+
+		LocationParseState();
+	};
+
 	// Helper methods
 	void skipWhitespace();
 	void skipComments();
@@ -75,9 +105,9 @@ private:
 	// Parsing methods
 	Config parseConfig();
 	ServerConfig parseServer();
-	Route parseLocation();
-	void parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value);
-	void parseLocationDirective(Route &route, const std::string &directive, const std::string &value);
+	Route parseLocation(const ServerConfig &server);
+	void parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value, ServerParseState &state);
+	void parseLocationDirective(Route &route, const std::string &directive, const std::string &value, LocationParseState &state);
 
 	// Validation methods
 	void validateConfig(const Config &config) const;
