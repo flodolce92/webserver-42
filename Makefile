@@ -21,7 +21,8 @@ SRC			=	Server.cpp \
 				ConfigParser.cpp \
 				ConfigManager.cpp \
 				Response.cpp \
-				CGIHandler.cpp
+				CGIHandler.cpp \
+				FileServer.cpp
 SRCS		=	$(addprefix $(SRCS_DIR), $(SRC))
 OBJS		=	$(addprefix $(OBJS_DIR), $(SRC:.cpp=.o))
 

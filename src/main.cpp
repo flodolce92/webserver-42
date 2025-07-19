@@ -1,4 +1,5 @@
 #include <ConfigManager.hpp>
+#include <FileServer.hpp>
 #include <Server.hpp>
 #include <iostream>
 
@@ -17,7 +18,7 @@ int main(int argc, char *argv[])
 
 			// Test route finder on first server
 			const std::vector<ServerConfig> &servers = configManager.getServers();
-			std::string requestPath = "/api/index.html";
+			std::string requestPath = "/";
 			if (!servers.empty())
 			{
 				const ServerConfig &server = servers[0];
@@ -27,6 +28,18 @@ int main(int argc, char *argv[])
 					std::cout << "✅ Matched route for path '" << requestPath << "':\n";
 					std::cout << "Path: " << matchedRoute->path << "\n";
 					std::cout << "Root: " << matchedRoute->root << "\n";
+
+					// Resolve file path using FileServer
+					std::string filePath = FileServer::resolveStaticFilePath(requestPath, *matchedRoute);
+					if (!filePath.empty())
+					{
+						std::cout << "File path resolved: " << filePath << "\n";
+						std::string content = FileServer::readFileContent(filePath);
+						if (!content.empty())
+							std::cout << "File content read successfully.\n";
+					}
+					else
+						std::cout << "❌ No file found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
 				}
 				else
 					std::cout << "❌ No matching route found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
