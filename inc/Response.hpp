@@ -16,19 +16,23 @@
 #include <sstream>
 
 #include <ClientConnection.hpp>
+#include <ConfigManager.hpp>
+#include <FileServer.hpp>
+#include <CGIHandler.hpp>
+
 
 class Response
 {
 private:
 	int					_code;
 	ClientConnection* 	_client;
-	const char*			_fileName;
+	std::string			_fileName;
 	char* 				_message;
 	std::string			_body;
 	std::string 		_header;
 
 public:
-	Response( ClientConnection *client );
+	Response( ClientConnection *client, const ConfigManager & configManager );
 	Response( const Response& src );
 	Response& operator=( const Response& src );
 	~Response();

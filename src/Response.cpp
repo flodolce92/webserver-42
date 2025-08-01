@@ -1,50 +1,186 @@
 #include <Response.hpp>
 
-Response::Response( ClientConnection *client ):
+static int stoi( std::string s );
+static std::string extractFilename(const std::string& requestBody);
+
+Response::Response( ClientConnection *client, const ConfigManager & configManager ):
 	_code(200),
 	_client(client)
 {
-	std::cout << "Response class created" << std::endl;
-
 	std::string request_str(client->getReadBuffer());
 	std::string cleanRequest = request_str.substr(0, request_str.find("\n"));
+
+	std::string host = request_str.substr(request_str.find("Host:") + 6, request_str.find("\r\n"));
+
 	size_t pos = 0;
 	std::string sub;
 	std::vector<std::string> vectorRequest;
-	while (pos != std::string::npos)
+	while ((pos = cleanRequest.find(' ')) != std::string::npos)
 	{
-		pos = cleanRequest.find('/');
 		sub = cleanRequest.substr(0, pos);
 		vectorRequest.push_back(sub);
 		cleanRequest.erase(0, pos + 1);
 	}
-	std::vector<std::string>::const_iterator const_it = vectorRequest.begin();
-	if (*const_it == "GET " and request_str[4] != ' ')
+	vectorRequest.push_back(cleanRequest);
+
+	std::string method = vectorRequest[0];
+	std::string filename = vectorRequest[1];
+	
+	int port = stoi(host.substr(host.find(":") + 1, host.find("\n")));
+	std::string hostName = host.substr(0, host.find(":"));
+	
+	const ServerConfig *server = configManager.findServer(hostName, port);
+	const Route *matchedRoute = server->findMatchingRoute(filename);
+	
+	if (configManager.isMethodAllowed(*matchedRoute, method) == false)
 	{
-		vectorRequest.erase(vectorRequest.begin());
-		vectorRequest.pop_back();
-		(vectorRequest.back()).erase(((vectorRequest.back()).length() - 5), 5);
-		std::string filename;
-		std::vector<std::string>::const_iterator i = vectorRequest.begin();
-		filename = *i;
-		i++;
-		for ( ; i != vectorRequest.end(); i++)
-		filename += '/' + *i;
-		this->_fileName = filename.c_str();
+		this->_fileName = FileServer::resolveStaticFilePath("error/error.html", *matchedRoute);
+		this->_code = 405;
+		readFile();
+		return ;
+	}
+
+	if (matchedRoute->redirect_code == 301 and !(matchedRoute->redirect_url.empty()))
+	{
+		// do this
+	}
+
+	if (configManager.isCGIRequest(*matchedRoute, filename) == true)
+	{
+		std::string fullPath = FileServer::resolveStaticFilePath(filename, *matchedRoute);
+		std::string body;
+        size_t body_pos = request_str.find("\r\n\r\n");
+        if (body_pos != std::string::npos)
+            body = request_str.substr(body_pos + 4);
+		else
+		{
+			this->_code = 400;
+			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+			readFile();
+			return;
+		}
+		// come le prende le variabili di ambiente?
+		// CGIHandler::executeCGI(fullPath, body, env_var);
+		return ;
+	}
+
+	if (method == "GET")
+	{
+		std::string fullPath = FileServer::resolveStaticFilePath(filename, *matchedRoute);
+		this->_fileName = fullPath;
 		readFile();
 	}
-	else if (*const_it == "POST " and request_str[5] != ' ')
+	else if (method == "POST")
 	{
 		std::cout << "POST" << std::endl;
+
+        std::string body;
+        size_t body_pos = request_str.find("\r\n\r\n");
+        if (body_pos != std::string::npos)
+            body = request_str.substr(body_pos + 4);
+		else
+		{
+			this->_code = 400;
+			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+			readFile();
+			return;
+		}
+
+        std::string fullPath = matchedRoute->root + "/" + extractFilename(body);
+
+        struct stat fileInfo;
+        if (stat(fullPath.c_str(), &fileInfo) == 0)
+		{
+            this->_code = 409;
+            this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+            readFile();
+        }
+		else
+		{
+            std::ofstream newFile(fullPath.c_str(), std::ios::out | std::ios::binary);
+            if (newFile.is_open())
+			{
+				std::string newFileContent = body.substr(body.find("\r\n"));
+				std::cout << "newFileContent:\n" << newFileContent << std::endl;
+
+                newFile.write(newFileContent.c_str(), newFileContent.length());
+                newFile.close();
+
+                this->_code = 201;
+                setHeader(this->_code);
+                this->_client->appendToWriteBuffer(this->_header);
+            }
+			else
+			{
+                this->_code = 500;
+                this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+                readFile();
+            }
+        }
 	}
-	else if (*const_it == "DELETE " and request_str[7] != ' ')
+	else if (method == "DELETE")
 	{
-		std::cout << "DELETE" << std::endl;
+		std::cout << "Delete" << std::endl;
+        std::string fullPath = FileServer::resolveStaticFilePath(filename, *matchedRoute);
+		std::cout << "Delete Path: " << fullPath << std::endl;
+
+        struct stat fileInfo;
+        if (stat(fullPath.c_str(), &fileInfo) == -1)
+		{
+            this->_code = 404;
+            this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+            readFile();
+            return;
+        }
+
+        if (remove(fullPath.c_str()) == 0)
+		{
+            this->_code = 204;
+			this->_body = "";
+            setHeader(this->_code);
+            this->_client->appendToWriteBuffer(this->_header);
+        }
+		else
+		{
+            this->_code = 500;
+            this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+            readFile();
+        }
 	}
 	else
 	{
-		std::cout << "not support" << std::endl;
+		std::cout << "Method not supported: " << method << std::endl;
+		this->_code = 501;
+		this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedRoute);
+		readFile();
 	}
+}
+
+static std::string extractFilename(const std::string& requestBody)
+{
+    const std::string filename_marker = "filename=\"";
+
+    size_t start_pos = requestBody.find(filename_marker);
+	
+    if (start_pos == std::string::npos) 
+		return "";
+	
+    start_pos += filename_marker.length();
+	
+    size_t end_pos = requestBody.find('"', start_pos);
+	
+    if (end_pos == std::string::npos)
+		return "";
+	
+	std::cout << requestBody.substr(start_pos, end_pos - start_pos) << std::endl;
+    return requestBody.substr(start_pos, end_pos - start_pos);
+}
+
+static int stoi( std::string s )
+{
+	int i;
+	std::istringstream(s) >> i;
+	return i;
 }
 
 Response::Response( const Response& src ) :
@@ -80,20 +216,20 @@ void Response::readFile()
 {
 	struct stat fileInfo;
 
-	if (stat(this->_fileName, &fileInfo) == -1)
+	if (stat(this->_fileName.c_str(), &fileInfo) == -1)
 	{
 		std::cerr << "Error getting file stats for '" << this->_fileName << "': " << strerror(errno) << std::endl;
-		this->_fileName = "prova/error.html";
+		this->_fileName = "var/www/html/error/error.html";
 		this->_code = 404;
 		readFile();
 		return ;
 	}
 
-	int fd = open(this->_fileName, O_RDONLY);
+	int fd = open(this->_fileName.c_str(), O_RDONLY);
 	if (fd == -1)
 	{
 		std::cerr << "Error opening file '" << this->_fileName << "'. errno: " << errno << " (" << strerror(errno) << ")" << std::endl;
-		this->_fileName = "prova/error.html";
+		this->_fileName = "var/www/html/error/error.html";
 		this->_code = 404;
 		readFile();
 		return ;
