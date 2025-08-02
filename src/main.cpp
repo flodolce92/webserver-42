@@ -16,21 +16,21 @@ int main(int argc, char *argv[])
 			configManager.printConfiguration();
 			std::cout << std::endl;
 
-			// Test route finder on first server
+			// Test location finder on first server
 			const std::vector<ServerConfig> &servers = configManager.getServers();
 			std::string requestPath = "/";
 			if (!servers.empty())
 			{
 				const ServerConfig &server = servers[0];
-				const Route *matchedRoute = server.findMatchingRoute(requestPath);
-				if (matchedRoute)
+				const Location *matchedLocation = server.findMatchingLocation(requestPath);
+				if (matchedLocation)
 				{
-					std::cout << "✅ Matched route for path '" << requestPath << "':\n";
-					std::cout << "Path: " << matchedRoute->path << "\n";
-					std::cout << "Root: " << matchedRoute->root << "\n";
+					std::cout << "✅ Matched location for path '" << requestPath << "':\n";
+					std::cout << "Path: " << matchedLocation->path << "\n";
+					std::cout << "Root: " << matchedLocation->root << "\n";
 
 					// Resolve file path using FileServer
-					std::string filePath = FileServer::resolveStaticFilePath(requestPath, *matchedRoute);
+					std::string filePath = FileServer::resolveStaticFilePath(requestPath, *matchedLocation);
 					if (!filePath.empty())
 					{
 						std::cout << "File path resolved: " << filePath << "\n";
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 						std::cout << "❌ No file found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
 				}
 				else
-					std::cout << "❌ No matching route found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
+					std::cout << "❌ No matching location found for path '" << requestPath << "' in server: " << server.host << ":" << server.port << "\n";
 			}
 			std::cout << std::endl;
 

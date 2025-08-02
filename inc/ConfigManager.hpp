@@ -28,9 +28,9 @@ public:
 	const ServerConfig *findServerByName(const std::string &server_name, const std::string &host, int port) const;
 
 	// Utility methods
-	bool isMethodAllowed(const Route &route, const std::string &method) const;
-	std::string resolveFilePath(const Route &route, const std::string &request_path) const;
-	bool isCGIRequest(const Route &route, const std::string &file_path) const;
+	bool isMethodAllowed(const Location &location, const std::string &method) const;
+	std::string resolveFilePath(const Location &location, const std::string &request_path) const;
+	bool isCGIRequest(const Location &location, const std::string &file_path) const;
 
 	// Debug methods
 	void printConfiguration() const;

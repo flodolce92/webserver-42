@@ -35,14 +35,14 @@ bool FileServer::getStat(const std::string &path, struct stat &st)
 	return true;
 }
 
-std::string FileServer::resolveStaticFilePath(const std::string &requestPath, const Route &route)
+std::string FileServer::resolveStaticFilePath(const std::string &requestPath, const Location &location)
 {
-	std::string full_fs_path = route.root;
+	std::string full_fs_path = location.root;
 	std::string normalizedRequestPath = normalizePathInternal(requestPath);
 
-	if (route.root.length() > 1 || normalizedRequestPath != "/")
+	if (location.root.length() > 1 || normalizedRequestPath != "/")
 	{
-		if (route.root[route.root.length() - 1] == '/' && normalizedRequestPath[0] == '/')
+		if (location.root[location.root.length() - 1] == '/' && normalizedRequestPath[0] == '/')
 			full_fs_path += normalizedRequestPath.substr(1);
 		else
 			full_fs_path += normalizedRequestPath;
@@ -66,16 +66,16 @@ std::string FileServer::resolveStaticFilePath(const std::string &requestPath, co
 			full_fs_path += '/';
 
 		// Iterate through index_files
-		for (size_t i = 0; i < route.index_files.size(); ++i)
+		for (size_t i = 0; i < location.index_files.size(); ++i)
 		{
-			std::string indexPath = full_fs_path + route.index_files[i];
+			std::string indexPath = full_fs_path + location.index_files[i];
 			struct stat index_st;
 			if (getStat(indexPath, index_st) && S_ISREG(index_st.st_mode))
 				return indexPath; // Found an index file from the list
 		}
 
 		// If no index file found for a directory:
-		if (route.autoindex)
+		if (location.autoindex)
 		{
 			// Return the directory path itself, the caller will generate listing.
 			return full_fs_path;
