@@ -23,11 +23,11 @@ private:
 	static void initMimeTypes();
 
 public:
-	// Resolves the actual file path on the filesystem for a given request and route.
+	// Resolves the actual file path on the filesystem for a given request and location.
 	// Returns the full file path if found (regular file).
 	// Returns the directory path if it is a directory and listing is allowed (or if an index is requested).
 	// Returns an empty string in case of file not found, access denied, or error.
-	static std::string resolveStaticFilePath(const std::string &requestPath, const Route &route);
+	static std::string resolveStaticFilePath(const std::string &requestPath, const Location &location);
 
 	// Reads the content of a file from the specified path and returns it as a string.
 	// Returns an empty string in case of read error.

@@ -3,31 +3,31 @@
 #include <stdexcept>
 #include <sys/stat.h>
 
-const Route *ServerConfig::findMatchingRoute(const std::string &requestPath) const
+const Location *ServerConfig::findMatchingLocation(const std::string &requestPath) const
 {
-	const Route *bestMatch = NULL;
+	const Location *bestMatch = NULL;
 	size_t longestMatchLength = 0;
 
-	for (size_t i = 0; i < routes.size(); ++i)
+	for (size_t i = 0; i < locations.size(); ++i)
 	{
-		const Route &currentRoute = routes[i];
+		const Location &currentLocation = locations[i];
 		std::string normRequestPath = normalizePath(requestPath);
-		std::string normCurrRoutePath = normalizePath(currentRoute.path);
+		std::string normCurrLocationPath = normalizePath(currentLocation.path);
 
-		if (normRequestPath.rfind(normCurrRoutePath, 0) == 0)
+		if (normRequestPath.rfind(normCurrLocationPath, 0) == 0)
 		{
-			bool isExactMatch = (normCurrRoutePath.length() == normRequestPath.length());
+			bool isExactMatch = (normCurrLocationPath.length() == normRequestPath.length());
 			bool isDirectoryMatch = !isExactMatch &&
-									(normRequestPath.length() > normCurrRoutePath.length() &&
-									 normRequestPath[normCurrRoutePath.length()] == '/');
-			bool isRootMatch = (normCurrRoutePath == "/");
+									(normRequestPath.length() > normCurrLocationPath.length() &&
+									 normRequestPath[normCurrLocationPath.length()] == '/');
+			bool isRootMatch = (normCurrLocationPath == "/");
 
 			if (isExactMatch || isDirectoryMatch || isRootMatch)
 			{
-				if (normCurrRoutePath.length() > longestMatchLength)
+				if (normCurrLocationPath.length() > longestMatchLength)
 				{
-					longestMatchLength = normCurrRoutePath.length();
-					bestMatch = &currentRoute;
+					longestMatchLength = normCurrLocationPath.length();
+					bestMatch = &currentLocation;
 				}
 			}
 		}
@@ -137,38 +137,38 @@ const ServerConfig *ConfigManager::findServerByName(const std::string &server_na
 	return matching_servers[0];
 }
 
-bool ConfigManager::isMethodAllowed(const Route &route, const std::string &method) const
+bool ConfigManager::isMethodAllowed(const Location &location, const std::string &method) const
 {
 	// If allow_methods is empty, all mandatory methods are allowed.
-	if (route.allowed_methods.empty())
+	if (location.allowed_methods.empty())
 		return (method == "GET" || method == "POST" || method == "DELETE");
 
-	for (size_t i = 0; i < route.allowed_methods.size(); ++i)
+	for (size_t i = 0; i < location.allowed_methods.size(); ++i)
 	{
-		if (route.allowed_methods[i] == method)
+		if (location.allowed_methods[i] == method)
 			return true;
 	}
 	return false;
 }
 
-std::string ConfigManager::resolveFilePath(const Route &route, const std::string &request_path) const
+std::string ConfigManager::resolveFilePath(const Location &location, const std::string &request_path) const
 {
 	// Ensure root path ends with a slash for correct concatenation
-	std::string root_path = route.root;
+	std::string root_path = location.root;
 	if (!root_path.empty() && root_path[root_path.length() - 1] != '/')
 		root_path += '/';
 
-	// Ensure route path starts with a slash
-	std::string route_path = normalizePath(route.path);
+	// Ensure location path starts with a slash
+	std::string location_path = normalizePath(location.path);
 
 	// Get the part of the request path that comes after the location's path
 	std::string relative_path;
-	if (request_path.find(route_path) == 0)
+	if (request_path.find(location_path) == 0)
 	{
-		if (route_path == "/")
+		if (location_path == "/")
 			relative_path = request_path.substr(1);
 		else
-			relative_path = request_path.substr(route_path.length());
+			relative_path = request_path.substr(location_path.length());
 	}
 
 	// Remove leading slash from relative_path if it exists
@@ -178,9 +178,9 @@ std::string ConfigManager::resolveFilePath(const Route &route, const std::string
 	return root_path + relative_path;
 }
 
-bool ConfigManager::isCGIRequest(const Route &route, const std::string &file_path) const
+bool ConfigManager::isCGIRequest(const Location &location, const std::string &file_path) const
 {
-	if (route.cgi_extension.empty() || route.cgi_path.empty())
+	if (location.cgi_extension.empty() || location.cgi_path.empty())
 		return false;
 
 	size_t dot_pos = file_path.find_last_of('.');
@@ -188,7 +188,7 @@ bool ConfigManager::isCGIRequest(const Route &route, const std::string &file_pat
 		return false;
 
 	std::string extension = file_path.substr(dot_pos);
-	return extension == route.cgi_extension;
+	return extension == location.cgi_extension;
 }
 
 void ConfigManager::printConfiguration() const

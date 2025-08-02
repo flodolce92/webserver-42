@@ -2,8 +2,8 @@
 #include <cctype>
 #include <sys/stat.h>
 
-// Route
-Route::Route()
+// Location
+Location::Location()
 	: path(""),
 	  allowed_methods(),
 	  redirect_code(0),
@@ -26,7 +26,7 @@ ServerConfig::ServerConfig()
 	  server_names(),
 	  error_pages(),
 	  client_max_body_size(1048576),
-	  routes(),
+	  locations(),
 	  root(""),
 	  index_files(),
 	  autoindex(false),
@@ -225,7 +225,7 @@ ServerConfig ConfigParser::parseServer()
 			throwError("Empty directive");
 
 		if (directive == "location")
-			server.routes.push_back(parseLocation(server));
+			server.locations.push_back(parseLocation(server));
 		else
 		{
 			std::string value;
@@ -255,20 +255,20 @@ ServerConfig ConfigParser::parseServer()
 	return server;
 }
 
-Route ConfigParser::parseLocation(const ServerConfig &server)
+Location ConfigParser::parseLocation(const ServerConfig &server)
 {
-	Route route;
+	Location location;
 	LocationParseState state;
 
 	// Inherit server directives
-	route.root = server.root;
-	route.index_files = server.index_files;
-	route.autoindex = server.autoindex;
-	route.allowed_methods = server.allowed_methods;
+	location.root = server.root;
+	location.index_files = server.index_files;
+	location.autoindex = server.autoindex;
+	location.allowed_methods = server.allowed_methods;
 
-	route.path = getNextToken();
+	location.path = getNextToken();
 
-	if (route.path.empty() || route.path[0] != '/')
+	if (location.path.empty() || location.path[0] != '/')
 		throwError("Location path must start with '/'");
 
 	skipWhitespace();
@@ -302,7 +302,7 @@ Route ConfigParser::parseLocation(const ServerConfig &server)
 		if (value.empty())
 			throwError("Missing value for directive: " + directive);
 
-		parseLocationDirective(route, directive, value, state);
+		parseLocationDirective(location, directive, value, state);
 
 		skipWhitespace();
 		if (!isAtEnd() && content[pos] == ';')
@@ -312,18 +312,18 @@ Route ConfigParser::parseLocation(const ServerConfig &server)
 	}
 
 	// Logical validation after parsing the block
-	if (route.root.empty() && !state.return_found && !state.cgi_path_found)
-		throwError("Location block for path '" + route.path + "' must have a 'root', 'return', or 'cgi_path' directive.");
+	if (location.root.empty() && !state.return_found && !state.cgi_path_found)
+		throwError("Location block for path '" + location.path + "' must have a 'root', 'return', or 'cgi_path' directive.");
 
 	if (state.cgi_extension_found && !state.cgi_path_found)
-		throwError("'cgi_extension' is set without a 'cgi_path' in location '" + route.path + "'");
+		throwError("'cgi_extension' is set without a 'cgi_path' in location '" + location.path + "'");
 
 	if (state.cgi_path_found && !state.cgi_extension_found)
-		throwError("'cgi_path' is set without a 'cgi_extension' in location '" + route.path + "'");
+		throwError("'cgi_path' is set without a 'cgi_extension' in location '" + location.path + "'");
 
 	if (state.upload_path_found)
 	{
-		std::vector<std::string> methods = route.allowed_methods;
+		std::vector<std::string> methods = location.allowed_methods;
 		bool post_found = false;
 		for (size_t i = 0; i < methods.size(); ++i)
 		{
@@ -334,22 +334,22 @@ Route ConfigParser::parseLocation(const ServerConfig &server)
 			}
 		}
 		if (!post_found)
-			throwError("'upload_path' is set, but 'POST' method is not specified in 'allow_methods' for location '" + route.path + "'");
+			throwError("'upload_path' is set, but 'POST' method is not specified in 'allow_methods' for location '" + location.path + "'");
 	}
 
 	if (state.return_found)
 	{
-		if (route.redirect_code < 300 || route.redirect_code >= 400)
-			throwError("Invalid redirect code in 'return' directive for location '" + route.path + "'. Must be a 3xx code.");
-		if (route.redirect_url.empty())
-			throwError("'return' directive must specify a URL for location '" + route.path + "'");
+		if (location.redirect_code < 300 || location.redirect_code >= 400)
+			throwError("Invalid redirect code in 'return' directive for location '" + location.path + "'. Must be a 3xx code.");
+		if (location.redirect_url.empty())
+			throwError("'return' directive must specify a URL for location '" + location.path + "'");
 
-		route.root.clear();
-		route.index_files.clear();
-		route.autoindex = false;
+		location.root.clear();
+		location.index_files.clear();
+		location.autoindex = false;
 	}
 
-	return route;
+	return location;
 }
 
 void ConfigParser::parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value, ServerParseState &state)
@@ -431,15 +431,15 @@ void ConfigParser::parseServerDirective(ServerConfig &server, const std::string 
 		throwError("Unknown server directive: " + directive);
 }
 
-void ConfigParser::parseLocationDirective(Route &route, const std::string &directive, const std::string &value, LocationParseState &state)
+void ConfigParser::parseLocationDirective(Location &location, const std::string &directive, const std::string &value, LocationParseState &state)
 {
 	if (directive == "allow_methods")
 	{
-		route.allowed_methods = split(value, ' ');
-		for (size_t i = 0; i < route.allowed_methods.size(); ++i)
+		location.allowed_methods = split(value, ' ');
+		for (size_t i = 0; i < location.allowed_methods.size(); ++i)
 		{
-			if (!isValidMethod(route.allowed_methods[i]))
-				throwError("Invalid HTTP method: " + route.allowed_methods[i]);
+			if (!isValidMethod(location.allowed_methods[i]))
+				throwError("Invalid HTTP method: " + location.allowed_methods[i]);
 		}
 	}
 	else if (directive == "return")
@@ -453,16 +453,16 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		std::vector<std::string> parts = split(value, ' ');
 		if (parts.size() == 2)
 		{
-			route.redirect_code = std::atoi(parts[0].c_str());
-			route.redirect_url = parts[1];
+			location.redirect_code = std::atoi(parts[0].c_str());
+			location.redirect_url = parts[1];
 		}
 		else if (parts.size() == 1)
 		{
-			route.redirect_code = 302; // Default redirect
+			location.redirect_code = 302; // Default redirect
 			if (parts[0].find("http://") == 0 || parts[0].find("https://") == 0 ||
 				parts[0].find("/") == 0)
 			{
-				route.redirect_url = parts[0];
+				location.redirect_url = parts[0];
 			}
 			else
 				throwError("Invalid return directive format, expected 'code url' or 'url'");
@@ -477,22 +477,22 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		if (state.return_found)
 			throwError("'root' directive conflicts with 'return'");
 		state.root_found = true;
-		route.root = value;
+		location.root = value;
 	}
 	else if (directive == "autoindex")
 	{
 		if (state.autoindex_found)
 			throwError("Duplicate 'autoindex' directive");
 		state.autoindex_found = true;
-		route.autoindex = (value == "on");
+		location.autoindex = (value == "on");
 	}
 	else if (directive == "index")
 	{
 		if (state.index_found)
 			throwError("Duplicate 'index' directive");
 		state.index_found = true;
-		route.index_files = split(value, ' ');
-		if (route.index_files.empty())
+		location.index_files = split(value, ' ');
+		if (location.index_files.empty())
 			throwError("'index' directive must specify at least one file");
 	}
 	else if (directive == "cgi_extension")
@@ -500,22 +500,22 @@ void ConfigParser::parseLocationDirective(Route &route, const std::string &direc
 		if (state.cgi_extension_found)
 			throwError("Duplicate 'cgi_extension' directive");
 		state.cgi_extension_found = true;
-		route.cgi_extension = value;
+		location.cgi_extension = value;
 	}
 	else if (directive == "cgi_path")
 	{
 		if (state.cgi_path_found)
 			throwError("Duplicate 'cgi_path' directive");
 		state.cgi_path_found = true;
-		route.cgi_path = value;
+		location.cgi_path = value;
 	}
 	else if (directive == "upload_path")
 	{
 		if (state.upload_path_found)
 			throwError("Duplicate 'upload_path' directive");
 		state.upload_path_found = true;
-		route.upload_path = value;
-		route.upload_enabled = true;
+		location.upload_path = value;
+		location.upload_enabled = true;
 	}
 	else
 		throwError("Unknown location directive: " + directive);
@@ -618,33 +618,33 @@ void ConfigParser::validateServer(const ServerConfig &server) const
 	if (!isValidPort(server.port))
 		throwError("Invalid port number");
 
-	for (size_t i = 0; i < server.routes.size(); ++i)
+	for (size_t i = 0; i < server.locations.size(); ++i)
 	{
-		validateRoute(server.routes[i]);
+		validateLocation(server.locations[i]);
 	}
 }
 
-void ConfigParser::validateRoute(const Route &route) const
+void ConfigParser::validateLocation(const Location &location) const
 {
-	if (route.path.empty())
-		throwError("Route path cannot be empty");
+	if (location.path.empty())
+		throwError("Location path cannot be empty");
 
-	for (size_t i = 0; i < route.allowed_methods.size(); ++i)
+	for (size_t i = 0; i < location.allowed_methods.size(); ++i)
 	{
-		if (!isValidMethod(route.allowed_methods[i]))
-			throwError("Invalid HTTP method: " + route.allowed_methods[i]);
+		if (!isValidMethod(location.allowed_methods[i]))
+			throwError("Invalid HTTP method: " + location.allowed_methods[i]);
 	}
 
-	if (!route.cgi_path.empty())
+	if (!location.cgi_path.empty())
 	{
 		struct stat st;
-		if (stat(route.cgi_path.c_str(), &st) != 0)
+		if (stat(location.cgi_path.c_str(), &st) != 0)
 		{
-			throwError("CGI path does not exist: " + route.cgi_path);
+			throwError("CGI path does not exist: " + location.cgi_path);
 		}
 		if (!(st.st_mode & S_IXUSR))
 		{
-			throwError("CGI path is not executable: " + route.cgi_path);
+			throwError("CGI path is not executable: " + location.cgi_path);
 		}
 	}
 }
@@ -679,56 +679,56 @@ void ConfigParser::printConfig(const Config &config) const
 				std::cout << "    " << it->first << " -> " << it->second << "\n";
 			}
 		}
-		std::cout << "  Routes:\n";
-		for (size_t j = 0; j < server.routes.size(); ++j)
+		std::cout << "  Locations:\n";
+		for (size_t j = 0; j < server.locations.size(); ++j)
 		{
-			const Route &route = server.routes[j];
-			std::cout << "    Location: " << route.path << "\n";
-			if (!route.allowed_methods.empty())
+			const Location &location = server.locations[j];
+			std::cout << "    Location: " << location.path << "\n";
+			if (!location.allowed_methods.empty())
 			{
 				std::cout << "      Methods: ";
-				for (size_t k = 0; k < route.allowed_methods.size(); ++k)
+				for (size_t k = 0; k < location.allowed_methods.size(); ++k)
 				{
-					std::cout << route.allowed_methods[k];
-					if (k < route.allowed_methods.size() - 1)
+					std::cout << location.allowed_methods[k];
+					if (k < location.allowed_methods.size() - 1)
 						std::cout << ", ";
 				}
 				std::cout << "\n";
 			}
-			if (!route.root.empty())
+			if (!location.root.empty())
 			{
-				std::cout << "      Root: " << route.root << "\n";
+				std::cout << "      Root: " << location.root << "\n";
 			}
-			if (!route.index_files.empty())
+			if (!location.index_files.empty())
 			{
 				std::cout << "      Index Files: ";
-				for (size_t k = 0; k < route.index_files.size(); ++k)
+				for (size_t k = 0; k < location.index_files.size(); ++k)
 				{
-					std::cout << route.index_files[k];
-					if (k < route.index_files.size() - 1)
+					std::cout << location.index_files[k];
+					if (k < location.index_files.size() - 1)
 						std::cout << ", ";
 				}
 				std::cout << "\n";
 			}
-			if (route.autoindex)
+			if (location.autoindex)
 			{
 				std::cout << "      Autoindex: ON\n";
 			}
-			if (!route.redirect_url.empty())
+			if (!location.redirect_url.empty())
 			{
-				std::cout << "      Redirect: " << route.redirect_code << " " << route.redirect_url << "\n";
+				std::cout << "      Redirect: " << location.redirect_code << " " << location.redirect_url << "\n";
 			}
-			if (!route.cgi_extension.empty())
+			if (!location.cgi_extension.empty())
 			{
-				std::cout << "      CGI Extension: " << route.cgi_extension << "\n";
+				std::cout << "      CGI Extension: " << location.cgi_extension << "\n";
 			}
-			if (!route.cgi_path.empty())
+			if (!location.cgi_path.empty())
 			{
-				std::cout << "      CGI Path: " << route.cgi_path << "\n";
+				std::cout << "      CGI Path: " << location.cgi_path << "\n";
 			}
-			if (route.upload_enabled)
+			if (location.upload_enabled)
 			{
-				std::cout << "      Upload Path: " << route.upload_path << "\n";
+				std::cout << "      Upload Path: " << location.upload_path << "\n";
 			}
 		}
 	}

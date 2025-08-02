@@ -10,12 +10,12 @@
 #include <cstdlib>
 
 // Forward declarations
-struct Route;
+struct Location;
 struct ServerConfig;
 class ConfigParser;
 
-// Route configuration structure
-struct Route
+// Location configuration structure
+struct Location
 {
 	std::string path;
 	std::vector<std::string> allowed_methods;
@@ -30,7 +30,7 @@ struct Route
 	std::string upload_path;
 	bool upload_enabled;
 
-	Route();
+	Location();
 };
 
 // Server configuration structure
@@ -41,7 +41,7 @@ struct ServerConfig
 	std::vector<std::string> server_names;
 	std::map<int, std::string> error_pages;
 	size_t client_max_body_size;
-	std::vector<Route> routes;
+	std::vector<Location> locations;
 
 	// Direttive ereditabili
 	std::string root;
@@ -50,7 +50,7 @@ struct ServerConfig
 	std::vector<std::string> allowed_methods;
 
 	ServerConfig();
-	const Route *findMatchingRoute(const std::string &requestPath) const;
+	const Location *findMatchingLocation(const std::string &requestPath) const;
 };
 
 // Main configuration structure
@@ -105,14 +105,14 @@ private:
 	// Parsing methods
 	Config parseConfig();
 	ServerConfig parseServer();
-	Route parseLocation(const ServerConfig &server);
+	Location parseLocation(const ServerConfig &server);
 	void parseServerDirective(ServerConfig &server, const std::string &directive, const std::string &value, ServerParseState &state);
-	void parseLocationDirective(Route &route, const std::string &directive, const std::string &value, LocationParseState &state);
+	void parseLocationDirective(Location &location, const std::string &directive, const std::string &value, LocationParseState &state);
 
 	// Validation methods
 	void validateConfig(const Config &config) const;
 	void validateServer(const ServerConfig &server) const;
-	void validateRoute(const Route &route) const;
+	void validateLocation(const Location &location) const;
 
 	// Utility methods
 	std::vector<std::string> split(const std::string &str, char delimiter) const;
