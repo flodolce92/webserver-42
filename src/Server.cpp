@@ -522,7 +522,7 @@ void Server::processRequest(int clientFd)
 	std::cout << "Client " << clientFd << "'s request: " << std::endl;
 	std::cout << client->getReadBuffer() << std::endl;
 	std::cout << "--------------------------" << std::endl;
-	Response response(client);
+	Response response(client, this->_configManager);
 
 	client->setState(CONN_WRITING_RESPONSE);
 }
