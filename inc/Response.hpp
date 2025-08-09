@@ -19,25 +19,43 @@
 #include <ConfigManager.hpp>
 #include <FileServer.hpp>
 #include <CGIHandler.hpp>
-
+#include <Request.hpp>
+#include <map>
+#include <StatusCodes.hpp>
 
 class Response
 {
 private:
-	int					_code;
-	ClientConnection* 	_client;
-	std::string			_fileName;
-	char* 				_message;
-	std::string			_body;
-	std::string 		_header;
+	int							_code;
+	char* 						_message;
+	std::string					_body;
+	std::string 				_header;
+	const Request&      		_request;
+	std::map<int, std::string>	_statusCodeMessages;
+	
+	std::string					_host;
+	std::string					_fileName;
+
+	void 						initializeStatusCodeMessages();
 
 public:
-	Response( ClientConnection *client, const ConfigManager & configManager );
+	Response( const ConfigManager & configManager,  const Request & request);
 	Response( const Response& src );
 	Response& operator=( const Response& src );
 	~Response();
 	void readFile();
 	void setHeader(int responseCase);
+
+	// Getters
+	int							getCode() const;
+	char* 						getMessage() const;
+	std::string					getBody() const;
+	std::string 				getHeader() const;
+	std::string 				getHost() const;
+	std::string 				getFileName() const;
+	const Request&      		getRequest() const;
+	std::map<int, std::string>	getStatusCodeMessages() const;
 };
 
+std::ostream & operator<<(std::ostream & os, const Response & response);
 #endif

@@ -40,6 +40,8 @@ public:
 	const std::string &getBody() const;
 	bool isValid() const;
 	bool isComplete() const;
+
+	std::string toString() const;
 };
 
 #endif
