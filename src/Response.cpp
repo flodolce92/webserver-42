@@ -4,6 +4,7 @@ static int ft_stoi(std::string s);
 static std::string extractHostName(const std::string &host);
 static int extractPort(const std::string &host);
 
+
 Response::Response(
 	const ConfigManager &configManager,
 	const Request &request) : _request(request), _configManager(configManager)
@@ -11,6 +12,7 @@ Response::Response(
 	// Init basic values -> TODO: Move to : ... params
 	this->_status = StatusCodes::OK;
 	this->_server = NULL;
+	this->_body = "";
 
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
@@ -198,14 +200,9 @@ std::string Response::getFileName() const
 
 void Response::readFile()
 {
-	// Skip reading file for certain status codes that don't need file content
-	if (this->_status == StatusCodes::NO_CONTENT || 
-		this->_status == StatusCodes::MOVED_PERMANENTLY) {
-		this->_body = "";
-		return;
-	}
-
 	// For status codes that already have error pages or generated content, proceed with reading
+
+	printf("Loop\n\n");
 
 	struct stat fileInfo;
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
@@ -221,6 +218,7 @@ void Response::readFile()
     {
 		if (this->_matchedLocation->autoindex) {
 			this->_body = FileServer::generateDirectoryListing(this->_filePath);
+			this->mimeType = FileServer::getMimeType(".html");
 			this->buildResponseContent();
 			return;
 		}
@@ -236,13 +234,16 @@ void Response::readFile()
 
 void Response::buildResponseContent() {
 	// Read the file content
-	this->readFile();
+	if (this->_body.size() == 0) {
+		this->readFile();
+	}
 
 	std::ostringstream oss;
 
 	// Build content type
 	std::string contentType = "Content-Type: ";
-	std::string mimeType = FileServer::getMimeType(this->_filePath);
+	if (this->mimeType.size() == 0)
+		std::string mimeType = FileServer::getMimeType(this->_filePath);
 	contentType += mimeType;
 	contentType += "\r\n";
 

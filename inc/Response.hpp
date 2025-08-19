@@ -31,6 +31,7 @@ private:
 	// Response parts
 	std::string _body;
 	StatusCodes::Code _status;
+	std::string mimeType;
 
 	// Full response (headers + body)
 	std::string _fullResponse;
