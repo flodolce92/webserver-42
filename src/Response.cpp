@@ -78,18 +78,40 @@ Response::Response(
 		this->handleUnsupported();
 }
 
-Response::Response(const Response &src) : _request(src._request), _configManager(src._configManager) // TODO: Implement
+Response::Response(const Response &src) : _request(src._request), _configManager(src._configManager)
 {
 	std::cout << "Response created as a copy of Response" << std::endl;
+
+	this->_body = src._body;
+    this->_status = src._status;
+    this->mimeType = src.mimeType;
+    this->_fullResponse = src._fullResponse;
+    this->_host = src._host;
+    this->_port = src._port;
+    this->_server = src._server;
+    this->_errorPageFilePath = src._errorPageFilePath;
+    this->_filePath = src._filePath;
+    this->_statusCodeMessages = src._statusCodeMessages;
+    this->_matchedLocation = src._matchedLocation;
 }
 
 Response &Response::operator=(const Response &src)
 {
 	std::cout << "Response assignation operator called" << std::endl;
 
-	// TODO: Implement this
 	if (this != &src)
 	{
+		this->_body = src._body;
+        this->_status = src._status;
+        this->mimeType = src.mimeType;
+        this->_fullResponse = src._fullResponse;
+        this->_host = src._host;
+        this->_port = src._port;
+        this->_server = src._server;
+        this->_errorPageFilePath = src._errorPageFilePath;
+        this->_filePath = src._filePath;
+        this->_statusCodeMessages = src._statusCodeMessages;
+        this->_matchedLocation = src._matchedLocation;
 	}
 	return (*this);
 }
