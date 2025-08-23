@@ -247,12 +247,11 @@ void Response::buildResponseContent() {
 	contentType += mimeType;
 	contentType += "\r\n";
 
-	// Build connection header -> TODO: Verify
 	std::string connection = "Connection: ";
 
 	const std::vector<std::string> connectionHeaderValues = this->_request.getHeaderValues("connection");
 	if (connectionHeaderValues.size() > 0)
-		connection += connection[0];
+		connection += connectionHeaderValues[0];
 	else
 		connection += "close";
 	connection += "\r\n";
