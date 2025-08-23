@@ -315,7 +315,7 @@ void Response::buildResponseContent() {
 	connection += "\r\n";
 
 	// Server Information
-	std::string server = "Server: Webserv/1.0\r\n"; // TODO: Move to a static const
+	static const std::string server = "Server: Webserv/1.0\r\n";
 
 	std::string contentLengthHeader;
 
