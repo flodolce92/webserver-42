@@ -6,14 +6,14 @@ static int extractPort(const std::string &host);
 
 
 Response::Response(
-	const ConfigManager &configManager,
-	const Request &request) : _request(request), _configManager(configManager)
+    const ConfigManager &configManager,
+    const Request &request) :
+    _request(request),
+    _body(""),
+    _status(StatusCodes::OK),
+    _configManager(configManager),
+    _server(NULL)
 {
-	// Init basic values -> TODO: Move to : ... params
-	this->_status = StatusCodes::OK;
-	this->_server = NULL;
-	this->_body = "";
-
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
 	{
@@ -50,13 +50,21 @@ Response::Response(
 
 	// TODO: Remember to change the Uri (do not include the query string)
 	this->_filePath = FileServer::resolveStaticFilePath(this->_request.getUri(), *this->_matchedLocation);
+
+	
 	if (configManager.isCGIRequest(*this->_matchedLocation, this->_filePath) == true)
 	{
 		std::string fullPath = FileServer::resolveStaticFilePath(this->_filePath, *this->_matchedLocation);
 		std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
+		std::map<std::string, std::string> env_var = this->_request.getHeaders();
+		env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
+		env_var["script_filename"] = this->_filePath;
+		env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
+		env_var["request_method"] = this->getMethod();
+		env_var["server_name"] =  "Webserv/1.0";
+		env_var["query_string"] = this->_request.getUri();
 
-		// TODO: Handle the ENV variables
-		// CGIHandler::executeCGI(fullPath, body, env_var);
+		// CGIHandler::executeCGI(fullPath, this->_request.getBody(), env_var);
 		return;
 	}
 
