@@ -12,7 +12,9 @@ Response::Response(
     _body(""),
     _status(StatusCodes::OK),
     _configManager(configManager),
-    _server(NULL)
+    _server(NULL),
+	_errorFound(false),
+	_connectionError(false)
 {
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
@@ -21,7 +23,7 @@ Response::Response(
 		this->buildResponseContent();
 		return;
 	}
-
+	
 	const ServerConfig *server = configManager.findServer(this->_host, this->_port);
 	if (server == NULL)
 	{
@@ -56,12 +58,14 @@ Response::Response(
 	{
 		std::string fullPath = FileServer::resolveStaticFilePath(this->_filePath, *this->_matchedLocation);
 		std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
+
 		std::map<std::string, std::string> env_var = this->_request.getHeaders();
 		env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
 		env_var["script_filename"] = this->_filePath;
 		env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
 		env_var["request_method"] = this->getMethod();
 		env_var["server_name"] =  "Webserv/1.0";
+		// TODO: Remember to change the Uri (to include only the query string)
 		env_var["query_string"] = this->_request.getUri();
 
 		// CGIHandler::executeCGI(fullPath, this->_request.getBody(), env_var);
@@ -93,6 +97,8 @@ Response::Response(const Response &src) : _request(src._request), _configManager
     this->_filePath = src._filePath;
     this->_statusCodeMessages = src._statusCodeMessages;
     this->_matchedLocation = src._matchedLocation;
+	this->_errorFound = src._errorFound;
+	this->_connectionError = src._connectionError;
 }
 
 Response &Response::operator=(const Response &src)
@@ -112,6 +118,8 @@ Response &Response::operator=(const Response &src)
         this->_filePath = src._filePath;
         this->_statusCodeMessages = src._statusCodeMessages;
         this->_matchedLocation = src._matchedLocation;
+		this->_errorFound = src._errorFound;
+		this->_connectionError = src._connectionError;
 	}
 	return (*this);
 }
@@ -230,16 +238,12 @@ std::string Response::getFileName() const
 
 void Response::readFile()
 {
-	// For status codes that already have error pages or generated content, proceed with reading
-
-	printf("Loop\n\n");
-
 	struct stat fileInfo;
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
     {
         std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
         this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
-        this->readFile();
+        this->readFileError();
         return;
     }
     
@@ -255,18 +259,37 @@ void Response::readFile()
         // Handle directory case
         std::cerr << "Path is a directory: '" << this->_filePath << "'" << std::endl;
         this->setErrorFilePathForStatus(StatusCodes::FORBIDDEN);
-        this->readFile();
+        this->readFileError();
         return;
     }
 
 	this->_body = FileServer::readFileContent(this->_filePath);
 }
 
+void Response::readFileError()
+{
+	struct stat fileInfo;
+	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
+    {
+        std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
+        this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->_connectionError = true;
+		this->_body = "<!DOCTYPE html><html><head><title>Error</title><style>body { font-family: sans-serif; text-align: center; margin-top: \
+			50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } \
+			h1 { color: #d9534f; }</style></head><body><div class='container'><h1>500 Internal Server Error</h1><p> \
+			The server encountered an unexpected condition that prevented it from fulfilling the request.</p></div></body></html>";
+        return;
+    }
+    
+	this->_body = FileServer::readFileContent(this->_filePath);
+}
+
 void Response::buildResponseContent() {
 	// Read the file content
-	if (this->_body.size() == 0) {
+	if (this->_errorFound == true)
+		this->readFileError();
+	if (this->_body.size() == 0 and this->_errorFound == false)
 		this->readFile();
-	}
 
 	std::ostringstream oss;
 
@@ -280,10 +303,15 @@ void Response::buildResponseContent() {
 	std::string connection = "Connection: ";
 
 	const std::vector<std::string> connectionHeaderValues = this->_request.getHeaderValues("connection");
-	if (connectionHeaderValues.size() > 0)
-		connection += connectionHeaderValues[0];
-	else
+	if (this->_connectionError == true)
 		connection += "close";
+	else
+	{
+		if (connectionHeaderValues.size() > 0)
+			connection += connectionHeaderValues[0];
+		else
+			connection += "close";
+	}
 	connection += "\r\n";
 
 	// Server Information
@@ -455,7 +483,7 @@ void Response::buildResponseContent() {
 								"\r\n" +
 								this->_body;
 			break;
-	}	
+	}
 }
 
 std::string Response::get() const
@@ -489,6 +517,9 @@ static int extractPort(const std::string &host)
 }
 
 void Response::setErrorFilePathForStatus(StatusCodes::Code status) {
+	if (this->_errorFound == true)
+		return ;
 	this->_status = status;
+	this->_errorFound = true;
 	this->_filePath = this->_server->getErrorPage(this->_status, *this->_matchedLocation);
 }

@@ -42,6 +42,10 @@ private:
 	const ConfigManager &_configManager;
 	const ServerConfig *_server;
 
+	// Error Handling
+	bool _errorFound;
+	bool _connectionError;
+
 	// Method Handlers
 	void handleGet();
 	void handlePost();
@@ -66,6 +70,7 @@ private:
 	// Response Builders
 	void buildResponseContent();
 	void readFile();
+	void readFileError();
 
 public:
 	Response(const ConfigManager &configManager, const Request &request);
