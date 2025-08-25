@@ -19,7 +19,7 @@ Response::Response(
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
 	{
-		this->setErrorFilePathForStatus(StatusCodes::BAD_REQUEST); // TODO: Change to malformed
+		this->setErrorFilePathForStatus(StatusCodes::BAD_REQUEST);
 		this->buildResponseContent();
 		return;
 	}
@@ -39,16 +39,16 @@ Response::Response(
 	{
 		this->setErrorFilePathForStatus(StatusCodes::METHOD_NOT_ALLOWED);
 		this->buildResponseContent();
-		return;
+		return ;
 	}
 
 	// Redirect if requested
 	if (this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY 
 		&& !(this->_matchedLocation->redirect_url.empty()))
 	{
-		// TODO: Implement this
+		this->handleRedirect();
+		return ;
 	}
-
 
 	// TODO: Remember to change the Uri (do not include the query string)
 	this->_filePath = FileServer::resolveStaticFilePath(this->_request.getUri(), *this->_matchedLocation);
@@ -56,19 +56,7 @@ Response::Response(
 	
 	if (configManager.isCGIRequest(*this->_matchedLocation, this->_filePath) == true)
 	{
-		std::string fullPath = FileServer::resolveStaticFilePath(this->_filePath, *this->_matchedLocation);
-		std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
-
-		std::map<std::string, std::string> env_var = this->_request.getHeaders();
-		env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
-		env_var["script_filename"] = this->_filePath;
-		env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
-		env_var["request_method"] = this->getMethod();
-		env_var["server_name"] =  "Webserv/1.0";
-		// TODO: Remember to change the Uri (to include only the query string)
-		env_var["query_string"] = this->_request.getUri();
-
-		// CGIHandler::executeCGI(fullPath, this->_request.getBody(), env_var);
+		this->handleCGI();
 		return;
 	}
 
@@ -129,6 +117,53 @@ Response::~Response()
 	std::cout << "Response class destroyed" << std::endl;
 }
 
+void Response::handleRedirect()
+{
+	std::string connection = "Connection: ";
+	const std::vector<std::string> connectionHeaderValues = this->_request.getHeaderValues("connection");
+	if (connectionHeaderValues.size() > 0)
+		connection += connectionHeaderValues[0];
+	else
+		connection += "close";
+	connection += "\r\n";
+
+	std::string location = "Location: " + this->_matchedLocation->redirect_url + "\r\n";
+
+	static const std::string server = "Server: Webserv/1.0\r\n";
+
+	this->_body = "<!DOCTYPE html><html><head><title>301 Moved Permanently</title><style>body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } h1 { color: #d9534f; }</style></head><body><div class='container'><h1>301 Moved Permanently</h1><p>This document has moved to a new location. Please follow the redirect.</p></div></body></html>";
+
+	std::ostringstream oss;
+	std::string contentLengthHeader;
+
+	oss << "Content-Length: " << this->_body.length() << "\r\n";
+	contentLengthHeader = oss.str();
+	this->_fullResponse = "HTTP/1.1 301 Moved Permanently\r\n" +
+							contentLengthHeader +
+							connection +
+							location +
+							server +
+							"\r\n" +
+							this->_body;
+}
+
+void Response::handleCGI()
+{
+	std::string fullPath = FileServer::resolveStaticFilePath(this->_filePath, *this->_matchedLocation);
+	std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
+
+	std::map<std::string, std::string> env_var = this->_request.getHeaders();
+	env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
+	env_var["script_filename"] = this->_filePath;
+	env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
+	env_var["request_method"] = this->getMethod();
+	env_var["server_name"] =  "Webserv/1.0";
+	// TODO: Remember to change the Uri (to include only the query string)
+	env_var["query_string"] = this->_request.getUri();
+
+	// CGIHandler::executeCGI(fullPath, this->_request.getBody(), env_var);
+}
+
 void Response::handleGet()
 {
 	if (this->_filePath.size() == 0) {
@@ -146,23 +181,22 @@ void Response::handleGet()
 void Response::handlePost()
 {
 	std::cout << "POST" << std::endl;
-
-	std::string fullPath = this->_matchedLocation->root + "/" + this->_filePath;
-
-	struct stat fileInfo;
-
-	// TODO: Q -> Is this okay? Why can't POST to update?
-	if (stat(fullPath.c_str(), &fileInfo) == 0)
+	
+	std::string fileName = this->extractFileName();
+	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
+	
+	if (access(fullPath.c_str(), F_OK) == 0)
 	{
 		this->setErrorFilePathForStatus(StatusCodes::CONFLICT);
 		this->buildResponseContent();
 		return;
 	}
-
+	
 	std::ofstream newFile(fullPath.c_str(), std::ios::out | std::ios::binary);
 	if (newFile.is_open())
 	{
 		std::string newFileContent = this->_request.getBody();
+		std::cout << "[" << this->_request.getBody() << "]" << std::endl;
 		newFile.write(newFileContent.c_str(), newFileContent.length());
 		newFile.close();
 		this->setErrorFilePathForStatus(StatusCodes::CREATED);
@@ -175,35 +209,35 @@ void Response::handlePost()
 	}
 }
 
-// TODO: Implement
 void Response::handleDelete()
 {
 	std::cout << "Delete" << std::endl;
 
-	// std::string fullPath = FileServer::resolveStaticFilePath(this->_filePath, *this->_matchedLocation);
-	// std::cout << "Delete Path: " << fullPath << std::endl;
+	std::string fileName = this->extractFileName();
+	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
 
 	// struct stat fileInfo;
-	// if (stat(fullPath.c_str(), &fileInfo) == -1)
-	// {
-	// 	this->_status = StatusCodes::NOT_FOUND;
-	// 	this->_filePath = this->_errorPageFilePath;
-	// 	readFile();
-	// 	return;
-	// }
+	struct stat fileInfo;
 
-	// if (remove(fullPath.c_str()) == 0)
-	// {
-	// 	this->_status = StatusCodes::NO_CONTENT;
-	// 	this->_body = "";
-	// 	buildResponseContent();
-	// }
-	// else
-	// {
-	// 	this->_status = StatusCodes::INTERNAL_SERVER_ERROR;
-	// 	this->_filePath = this->_errorPageFilePath;
-	// 	readFile();
-	// }
+	if (stat(fullPath.c_str(), &fileInfo) == -1)
+	{
+		this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
+		this->buildResponseContent();
+		return;
+	}
+
+	if (remove(fullPath.c_str()) == 0)
+	{
+		this->_status = StatusCodes::NO_CONTENT;
+		this->_body = "";
+		buildResponseContent();
+	}
+	else
+	{
+		this->_status = StatusCodes::INTERNAL_SERVER_ERROR;
+		this->_filePath = this->_errorPageFilePath;
+		readFile();
+	}
 }
 
 void Response::handleUnsupported()
@@ -516,7 +550,30 @@ static int extractPort(const std::string &host)
 	return ft_stoi(host.substr(splitIndex + 1));
 }
 
-void Response::setErrorFilePathForStatus(StatusCodes::Code status) {
+std::string Response::extractFileName()
+{
+	try
+	{
+		std::string contentDisposition = this->_request.getrawRequest();
+		int fromFind = contentDisposition.find("Content-Disposition:");
+		int toFind = abs(contentDisposition.find("\r\n", fromFind) - fromFind);
+		std::string fileNameDirt = contentDisposition.substr(fromFind, toFind);
+
+		fromFind = fileNameDirt.find("filename=");
+		std::string fileName = fileNameDirt.substr(fromFind);
+		fileName.erase(0, fileName.find_first_of("\"") + 1);
+		fileName.erase(fileName.length() - 1, 1);
+		
+		return (fileName);
+	}
+	catch (const std::exception& e)
+	{
+		return "";
+	}
+}
+
+void Response::setErrorFilePathForStatus(StatusCodes::Code status)
+{
 	if (this->_errorFound == true)
 		return ;
 	this->_status = status;

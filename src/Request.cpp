@@ -121,6 +121,7 @@ const std::string &Request::getUri() const { return _uri; }
 const std::string &Request::getVersion() const { return _version; }
 const std::map<std::string, std::string> &Request::getHeaders() const { return _headers; }
 const std::string &Request::getBody() const { return _body; }
+const std::string &Request::getrawRequest() const { return _rawRequest; }
 bool Request::isValid() const { return _isValid; }
 bool Request::isComplete() const { return _isComplete; }
 

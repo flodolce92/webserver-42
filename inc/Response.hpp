@@ -51,6 +51,8 @@ private:
 	void handlePost();
 	void handleDelete();
 	void handleUnsupported();
+	void handleRedirect();
+	void handleCGI();
 
 	// Initializers
 	int initPortAndHost();
@@ -62,6 +64,7 @@ private:
 	const Location *_matchedLocation;
 	bool hasError() const;
 	void setErrorFilePathForStatus(StatusCodes::Code status);
+	std::string extractFileName();
 
 	// Getters
 	std::string getMethod() const;
