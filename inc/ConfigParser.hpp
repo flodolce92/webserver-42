@@ -12,6 +12,7 @@
 // Forward declarations
 struct Location;
 struct ServerConfig;
+struct ResolutionResult;
 class ConfigParser;
 
 // Location configuration structure
@@ -50,7 +51,15 @@ struct ServerConfig
 	std::vector<std::string> allowed_methods;
 
 	ServerConfig();
+
+	// Finds the best matching location for a given request path.
+	// Returns a pointer to the best matching location, or nullptr if no match is found.
 	const Location *findMatchingLocation(const std::string &requestPath) const;
+
+	// Returns the error page for a given status code and location.
+	// If no custom error page is found, empty path is returned,
+	// with statusCode set to the provided code and pathType set to ERROR.
+	ResolutionResult getErrorPage(int code, const Location &location) const;
 };
 
 // Main configuration structure

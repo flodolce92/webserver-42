@@ -1,207 +1,127 @@
 #include <Response.hpp>
 
-static int stoi(std::string s);
-static std::string extractFilename(const std::string &requestBody);
+static int ft_stoi(std::string s);
+static std::string extractHostName(const std::string &host);
+static int extractPort(const std::string &host);
 
-Response::Response(ClientConnection *client, const ConfigManager &configManager) : _code(200),
-																				   _client(client)
+Response::Response(
+	const ConfigManager &configManager,
+	const Request &request) : _request(request),
+							  _body(""),
+							  _status(StatusCodes::OK),
+							  _configManager(configManager),
+							  _server(NULL),
+							  _errorFound(false),
+							  _connectionError(false)
 {
-	std::string request_str(client->getReadBuffer());
-	std::string cleanRequest = request_str.substr(0, request_str.find("\n"));
-
-	std::string host = request_str.substr(request_str.find("Host:") + 6, request_str.find("\r\n"));
-
-	size_t pos = 0;
-	std::string sub;
-	std::vector<std::string> vectorRequest;
-	while ((pos = cleanRequest.find(' ')) != std::string::npos)
+	// Initialize the Host and Port
+	if (this->initPortAndHost() == -1)
 	{
-		sub = cleanRequest.substr(0, pos);
-		vectorRequest.push_back(sub);
-		cleanRequest.erase(0, pos + 1);
-	}
-	vectorRequest.push_back(cleanRequest);
-
-	std::string method = vectorRequest[0];
-	std::string filename = vectorRequest[1];
-
-	int port = stoi(host.substr(host.find(":") + 1, host.find("\n")));
-	std::string hostName = host.substr(0, host.find(":"));
-
-	const ServerConfig *server = configManager.findServer(hostName, port);
-	const Location *matchedLocation = server->findMatchingLocation(filename);
-
-	if (configManager.isMethodAllowed(*matchedLocation, method) == false)
-	{
-		this->_fileName = FileServer::resolveStaticFilePath("error/error.html", *matchedLocation);
-		this->_code = 405;
-		readFile();
+		this->setErrorFilePathForStatus(StatusCodes::BAD_REQUEST);
+		this->buildResponseContent();
 		return;
 	}
 
-	if (matchedLocation->redirect_code == 301 and !(matchedLocation->redirect_url.empty()))
+	const ServerConfig *server = configManager.findServer(this->_host, this->_port);
+	if (server == NULL)
 	{
-		// do this
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->buildResponseContent();
+		return;
 	}
+	this->_server = server;
 
-	if (configManager.isCGIRequest(*matchedLocation, filename) == true)
+	// Set matched location and check if method allowed
+	this->_matchedLocation = server->findMatchingLocation(this->_request.getPath());
+	if (configManager.isMethodAllowed(*this->_matchedLocation, this->getMethod()) == false)
 	{
-		std::string fullPath = FileServer::resolveStaticFilePath(filename, *matchedLocation);
-		std::string body;
-		size_t body_pos = request_str.find("\r\n\r\n");
-		if (body_pos != std::string::npos)
-			body = request_str.substr(body_pos + 4);
-		else
-		{
-			this->_code = 400;
-			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-			readFile();
-			return;
-		}
-		// come le prende le variabili di ambiente?
-		// CGIHandler::executeCGI(fullPath, body, env_var);
+		this->setErrorFilePathForStatus(StatusCodes::METHOD_NOT_ALLOWED);
+		this->buildResponseContent();
 		return;
 	}
 
-	if (method == "GET")
+	// Redirect if requested
+	if (this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY && !(this->_matchedLocation->redirect_url.empty()))
 	{
-		std::string fullPath = FileServer::resolveStaticFilePath(filename, *matchedLocation);
-		this->_fileName = fullPath;
-		readFile();
+		this->handleRedirect();
+		return;
 	}
-	else if (method == "POST")
+
+	// Use getPath to trim query string
+	ResolutionResult result = FileServer::resolveStaticFilePath(this->_request.getPath(), *this->_matchedLocation);
+	this->_filePath = result.path;
+
+	// Check if there was an error in resolving the path
+	if (result.pathType == ERROR)
 	{
-		std::cout << "POST" << std::endl;
-
-		std::string body;
-		size_t body_pos = request_str.find("\r\n\r\n");
-		if (body_pos != std::string::npos)
-			body = request_str.substr(body_pos + 4);
-		else
-		{
-			this->_code = 400;
-			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-			readFile();
-			return;
-		}
-
-		std::string fullPath = matchedLocation->root + "/" + extractFilename(body);
-
-		struct stat fileInfo;
-		if (stat(fullPath.c_str(), &fileInfo) == 0)
-		{
-			this->_code = 409;
-			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-			readFile();
-		}
-		else
-		{
-			std::ofstream newFile(fullPath.c_str(), std::ios::out | std::ios::binary);
-			if (newFile.is_open())
-			{
-				std::string newFileContent = body.substr(body.find("\r\n"));
-				std::cout << "newFileContent:\n"
-						  << newFileContent << std::endl;
-
-				newFile.write(newFileContent.c_str(), newFileContent.length());
-				newFile.close();
-
-				this->_code = 201;
-				setHeader(this->_code);
-				this->_client->appendToWriteBuffer(this->_header);
-			}
-			else
-			{
-				this->_code = 500;
-				this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-				readFile();
-			}
-		}
+		// Set the error page path based on the status code
+		this->setErrorFilePathForStatus(static_cast<StatusCodes::Code>(result.statusCode));
+		this->buildResponseContent();
+		return;
 	}
-	else if (method == "DELETE")
+	else if (result.pathType == DIRECTORY)
 	{
-		std::cout << "Delete" << std::endl;
-		std::string fullPath = FileServer::resolveStaticFilePath(filename, *matchedLocation);
-		std::cout << "Delete Path: " << fullPath << std::endl;
-
-		struct stat fileInfo;
-		if (stat(fullPath.c_str(), &fileInfo) == -1)
-		{
-			this->_code = 404;
-			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-			readFile();
-			return;
-		}
-
-		if (remove(fullPath.c_str()) == 0)
-		{
-			this->_code = 204;
-			this->_body = "";
-			setHeader(this->_code);
-			this->_client->appendToWriteBuffer(this->_header);
-		}
-		else
-		{
-			this->_code = 500;
-			this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-			readFile();
-		}
+		this->_status = StatusCodes::OK;
+		this->_body = FileServer::generateDirectoryListing(this->_filePath);
+		this->mimeType = FileServer::getMimeType(".html");
+		this->buildResponseContent();
+		return;
 	}
+
+	if (configManager.isCGIRequest(*this->_matchedLocation, this->_filePath) == true)
+	{
+		this->handleCGI();
+		return;
+	}
+
+	if (this->getMethod() == "GET")
+		this->handleGet();
+	else if (this->getMethod() == "POST")
+		this->handlePost();
+	else if (this->getMethod() == "DELETE")
+		this->handleDelete();
 	else
-	{
-		std::cout << "Method not supported: " << method << std::endl;
-		this->_code = 501;
-		this->_fileName = FileServer::resolveStaticFilePath("error.html", *matchedLocation);
-		readFile();
-	}
+		this->handleUnsupported();
 }
 
-static std::string extractFilename(const std::string &requestBody)
-{
-	const std::string filename_marker = "filename=\"";
-
-	size_t start_pos = requestBody.find(filename_marker);
-
-	if (start_pos == std::string::npos)
-		return "";
-
-	start_pos += filename_marker.length();
-
-	size_t end_pos = requestBody.find('"', start_pos);
-
-	if (end_pos == std::string::npos)
-		return "";
-
-	std::cout << requestBody.substr(start_pos, end_pos - start_pos) << std::endl;
-	return requestBody.substr(start_pos, end_pos - start_pos);
-}
-
-static int stoi(std::string s)
-{
-	int i;
-	std::istringstream(s) >> i;
-	return i;
-}
-
-Response::Response(const Response &src) : _code(src._code),
-										  _client(src._client),
-										  _fileName(src._fileName),
-										  _message(src._message),
-										  _header(src._header)
+Response::Response(const Response &src) : _request(src._request), _configManager(src._configManager)
 {
 	std::cout << "Response created as a copy of Response" << std::endl;
+
+	this->_body = src._body;
+	this->_status = src._status;
+	this->mimeType = src.mimeType;
+	this->_fullResponse = src._fullResponse;
+	this->_host = src._host;
+	this->_port = src._port;
+	this->_server = src._server;
+	this->_errorPageFilePath = src._errorPageFilePath;
+	this->_filePath = src._filePath;
+	this->_statusCodeMessages = src._statusCodeMessages;
+	this->_matchedLocation = src._matchedLocation;
+	this->_errorFound = src._errorFound;
+	this->_connectionError = src._connectionError;
 }
 
 Response &Response::operator=(const Response &src)
 {
 	std::cout << "Response assignation operator called" << std::endl;
+
 	if (this != &src)
 	{
-		this->_code = src._code;
-		this->_client = src._client;
-		this->_fileName = src._fileName;
-		this->_message = src._message;
-		this->_header = src._header;
+		this->_body = src._body;
+		this->_status = src._status;
+		this->mimeType = src.mimeType;
+		this->_fullResponse = src._fullResponse;
+		this->_host = src._host;
+		this->_port = src._port;
+		this->_server = src._server;
+		this->_errorPageFilePath = src._errorPageFilePath;
+		this->_filePath = src._filePath;
+		this->_statusCodeMessages = src._statusCodeMessages;
+		this->_matchedLocation = src._matchedLocation;
+		this->_errorFound = src._errorFound;
+		this->_connectionError = src._connectionError;
 	}
 	return (*this);
 }
@@ -211,219 +131,455 @@ Response::~Response()
 	std::cout << "Response class destroyed" << std::endl;
 }
 
+void Response::handleRedirect()
+{
+	std::string connection = "Connection: ";
+	const std::vector<std::string> connectionHeaderValues = this->_request.getHeaderValues("connection");
+	if (connectionHeaderValues.size() > 0)
+		connection += connectionHeaderValues[0];
+	else
+		connection += "close";
+	connection += "\r\n";
+
+	std::string location = "Location: " + this->_matchedLocation->redirect_url + "\r\n";
+
+	static const std::string server = "Server: Webserv/1.0\r\n";
+
+	this->_body = "<!DOCTYPE html><html><head><title>301 Moved Permanently</title><style>body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } h1 { color: #d9534f; }</style></head><body><div class='container'><h1>301 Moved Permanently</h1><p>This document has moved to a new location. Please follow the redirect.</p></div></body></html>";
+
+	std::ostringstream oss;
+	std::string contentLengthHeader;
+
+	oss << "Content-Length: " << this->_body.length() << "\r\n";
+	contentLengthHeader = oss.str();
+	this->_fullResponse = "HTTP/1.1 301 Moved Permanently\r\n" +
+						  contentLengthHeader +
+						  connection +
+						  location +
+						  server +
+						  "\r\n" +
+						  this->_body;
+}
+
+void Response::handleCGI()
+{
+	std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
+
+	std::map<std::string, std::string> env_var = this->_request.getHeaders();
+	env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
+	env_var["script_filename"] = this->_filePath;
+	env_var["script_name"] = this->_filePath.substr(this->_filePath.find_last_of('/') + 1);
+	env_var["request_method"] = this->getMethod();
+	env_var["server_name"] = "Webserv/1.0";
+	env_var["query_string"] = this->_request.getQueryString();
+
+	CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
+}
+
+void Response::handleGet()
+{
+	// The constructor has already called setErrorFilePathForStatus for all ERROR cases
+	this->buildResponseContent();
+}
+
+void Response::handlePost()
+{
+	std::cout << "POST" << std::endl;
+
+	std::string fileName = this->extractFileName();
+	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
+
+	if (access(fullPath.c_str(), F_OK) == 0)
+	{
+		this->setErrorFilePathForStatus(StatusCodes::CONFLICT);
+		this->buildResponseContent();
+		return;
+	}
+
+	std::ofstream newFile(fullPath.c_str(), std::ios::out | std::ios::binary);
+	if (newFile.is_open())
+	{
+		std::string newFileContent = this->_request.getBody();
+		std::cout << "[" << this->_request.getBody() << "]" << std::endl;
+		newFile.write(newFileContent.c_str(), newFileContent.length());
+		newFile.close();
+		this->setErrorFilePathForStatus(StatusCodes::CREATED);
+		this->buildResponseContent();
+	}
+	else
+	{
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->buildResponseContent();
+	}
+}
+
+void Response::handleDelete()
+{
+	std::cout << "Delete" << std::endl;
+
+	std::string fileName = this->extractFileName();
+	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
+
+	// struct stat fileInfo;
+	struct stat fileInfo;
+
+	if (stat(fullPath.c_str(), &fileInfo) == -1)
+	{
+		this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
+		this->buildResponseContent();
+		return;
+	}
+
+	if (remove(fullPath.c_str()) == 0)
+	{
+		this->_status = StatusCodes::NO_CONTENT;
+		this->_body = "";
+		buildResponseContent();
+	}
+	else
+	{
+		this->_status = StatusCodes::INTERNAL_SERVER_ERROR;
+		this->_filePath = this->_errorPageFilePath;
+		readFile();
+	}
+}
+
+void Response::handleUnsupported()
+{
+	this->setErrorFilePathForStatus(StatusCodes::NOT_IMPLEMENTED);
+	this->buildResponseContent();
+}
+
+int Response::initPortAndHost()
+{
+	std::vector<std::string> hostVals = this->_request.getHeaderValues("host");
+
+	if (hostVals.size() == 0 || hostVals[0].find(':') == std::string::npos)
+	{
+		return (-1);
+	}
+
+	this->_port = extractPort(hostVals[0]);
+	this->_host = extractHostName(hostVals[0]);
+	return (0);
+}
+
+std::string Response::getMethod() const
+{
+	return this->_request.getMethod();
+}
+
+std::string Response::getFileName() const
+{
+	return this->_request.getPath();
+}
+
 void Response::readFile()
 {
 	struct stat fileInfo;
-
-	if (stat(this->_fileName.c_str(), &fileInfo) == -1)
+	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
 	{
-		std::cerr << "Error getting file stats for '" << this->_fileName << "': " << strerror(errno) << std::endl;
-		this->_fileName = "var/www/html/error/error.html";
-		this->_code = 404;
-		readFile();
+		std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
+		this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
+		this->readFileError();
 		return;
 	}
 
-	int fd = open(this->_fileName.c_str(), O_RDONLY);
-	if (fd == -1)
+	this->_body = FileServer::readFileContent(this->_filePath);
+
+	if (this->_body.empty())
 	{
-		std::cerr << "Error opening file '" << this->_fileName << "'. errno: " << errno << " (" << strerror(errno) << ")" << std::endl;
-		this->_fileName = "var/www/html/error/error.html";
-		this->_code = 404;
-		readFile();
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->readFileError();
 		return;
 	}
-
-	char *message = new char[fileInfo.st_size + 1];
-
-	ssize_t bytes_read;
-	bytes_read = read(fd, message, fileInfo.st_size);
-	if (bytes_read == -1)
-	{
-		std::cerr << "Error reading file: " << this->_fileName << std::endl;
-		delete[] message;
-		close(fd);
-		return;
-	}
-	message[bytes_read] = '\0';
-	close(fd);
-	this->_body = message;
-	setHeader(this->_code);
-	this->_client->appendToWriteBuffer(this->_header);
-	delete[] message;
 }
 
-void Response::setHeader(int responseCase)
+void Response::readFileError()
 {
+	struct stat fileInfo;
+	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
+	{
+		std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->_connectionError = true;
+		this->_body = "<!DOCTYPE html><html><head><title>Error</title><style>body { font-family: sans-serif; text-align: center; margin-top: \
+			50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } \
+			h1 { color: #d9534f; }</style></head><body><div class='container'><h1>500 Internal Server Error</h1><p> \
+			The server encountered an unexpected condition that prevented it from fulfilling the request.</p></div></body></html>";
+		return;
+	}
+
+	this->_body = FileServer::readFileContent(this->_filePath);
+}
+
+void Response::buildResponseContent()
+{
+	// Read the file content
+	if (this->_errorFound == true)
+		this->readFileError();
+	if (this->_body.size() == 0 and this->_errorFound == false)
+		this->readFile();
+
 	std::ostringstream oss;
-	std::string contentType = "Content-Type: text/html; charset=UTF-8\r\n";
-	std::string connection = "Connection: close\r\n";
-	std::string server = "Server: Webserv/1.0\r\n";
+
+	// Build content type
+	std::string contentType = "Content-Type: ";
+	if (this->mimeType.size() == 0)
+		std::string mimeType = FileServer::getMimeType(this->_filePath);
+	contentType += mimeType;
+	contentType += "\r\n";
+
+	std::string connection = "Connection: ";
+
+	const std::vector<std::string> connectionHeaderValues = this->_request.getHeaderValues("connection");
+	if (this->_connectionError == true)
+		connection += "close";
+	else
+	{
+		if (connectionHeaderValues.size() > 0)
+			connection += connectionHeaderValues[0];
+		else
+			connection += "close";
+	}
+	connection += "\r\n";
+
+	// Server Information
+	static const std::string server = "Server: Webserv/1.0\r\n";
+
 	std::string contentLengthHeader;
 
-	switch (responseCase)
+	switch (this->_status)
 	{
-	case 200: // OK - Successful response
+	case StatusCodes::OK: // OK - Successful response
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 200 OK\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 200 OK\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 201: // Created - Resource successfully created
+	case StatusCodes::CREATED: // Created - Resource successfully created
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 201 Created\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 201 Created\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 204: // No Content - Request successful, but no content to send (e.g., successful DELETE)
-		this->_header = "HTTP/1.1 204 No Content\r\n" +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+	case StatusCodes::NO_CONTENT: // No Content - Request successful, but no content to send (e.g., successful DELETE)
+		this->_fullResponse = "HTTP/1.1 204 No Content\r\n" +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 400: // Bad Request - Client sent a malformed request
+	case StatusCodes::BAD_REQUEST: // Bad Request - Client sent a malformed request
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 400 Bad Request\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 400 Bad Request\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 403: // Forbidden - Client doesn't have access rights
+	case StatusCodes::FORBIDDEN: // Forbidden - Client doesn't have access rights
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 403 Forbidden\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 403 Forbidden\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 404: // Not Found - Resource not found
+	case StatusCodes::NOT_FOUND: // Not Found - Resource not found
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 404 Not Found\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 404 Not Found\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 405: // Method Not Allowed - HTTP method not supported for resource
+	case StatusCodes::METHOD_NOT_ALLOWED: // Method Not Allowed - HTTP method not supported for resource
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, POST\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, POST\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 409: // Conflict - Request could not be completed due to a conflict
+	case StatusCodes::CONFLICT: // Conflict - Request could not be completed due to a conflict
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 409 Conflict\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 409 Conflict\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 413: // Payload Too Large - Request entity is larger than limits defined by server
+	case StatusCodes::PAYLOAD_TOO_LARGE: // Payload Too Large - Request entity is larger than limits defined by server
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 413 Payload Too Large\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 413 Payload Too Large\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 500: // Internal Server Error - Generic server-side error
+	case StatusCodes::INTERNAL_SERVER_ERROR: // Internal Server Error - Generic server-side error
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 500 Internal Server Error\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 501: // Not Implemented - Server does not support the functionality required to fulfill the request
+	case StatusCodes::NOT_IMPLEMENTED: // Not Implemented - Server does not support the functionality required to fulfill the request
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 501 Not Implemented\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 501 Not Implemented\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
-	case 504: // Gateway Timeout - The server, while acting as a gateway or proxy, did not get a response from an upstream server in time
+	case StatusCodes::GATEWAY_ERROR: // Gateway Timeout - The server, while acting as a gateway or proxy, did not get a response from an upstream server in time
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 504 Gateway Timeout\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 504 Gateway Timeout\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 
 	default: // Generic default for unexpected cases or unsupported status codes
 		oss.str("");
 		oss << "Content-Length: " << this->_body.length() << "\r\n";
 		contentLengthHeader = oss.str();
-		this->_header = "HTTP/1.1 500 Internal Server Error\r\n" +
-						contentType +
-						contentLengthHeader +
-						connection +
-						server +
-						"\r\n" +
-						this->_body;
+		this->_fullResponse = "HTTP/1.1 500 Internal Server Error\r\n" +
+							  contentType +
+							  contentLengthHeader +
+							  connection +
+							  server +
+							  "\r\n" +
+							  this->_body;
 		break;
 	}
+}
+
+std::string Response::get() const
+{
+	return this->_fullResponse;
+}
+
+bool Response::hasError() const
+{
+	return !this->_request.isValid() || this->_status == StatusCodes::BAD_REQUEST; // TODO: Add more cases
+}
+
+// Static Helper Methods
+static int ft_stoi(std::string s)
+{
+	int i;
+	std::istringstream(s) >> i;
+	return i;
+}
+
+static std::string extractHostName(const std::string &host)
+{
+	size_t splitIndex = host.find(':');
+	return host.substr(0, splitIndex);
+}
+
+static int extractPort(const std::string &host)
+{
+	size_t splitIndex = host.find(':');
+	return ft_stoi(host.substr(splitIndex + 1));
+}
+
+std::string Response::extractFileName()
+{
+	try
+	{
+		std::string contentDisposition = this->_request.getrawRequest();
+		int fromFind = contentDisposition.find("Content-Disposition:");
+		int toFind = abs(contentDisposition.find("\r\n", fromFind) - fromFind);
+		std::string fileNameDirt = contentDisposition.substr(fromFind, toFind);
+
+		fromFind = fileNameDirt.find("filename=");
+		std::string fileName = fileNameDirt.substr(fromFind);
+		fileName.erase(0, fileName.find_first_of("\"") + 1);
+		fileName.erase(fileName.length() - 1, 1);
+
+		return (fileName);
+	}
+	catch (const std::exception &e)
+	{
+		return "";
+	}
+}
+
+void Response::setErrorFilePathForStatus(StatusCodes::Code status)
+{
+	if (this->_errorFound == true)
+		return;
+	this->_status = status;
+	this->_errorFound = true;
+	ResolutionResult result = this->_server->getErrorPage(this->_status, *this->_matchedLocation);
+
+	// If a custom error page was found, use its path
+	// If no custom error page found, response should be a static error string
+	if (result.pathType != ERROR)
+		this->_filePath = result.path;
+	else
+		this->_filePath = "";
 }

@@ -3,6 +3,8 @@
 #include <sstream>
 #include <algorithm>
 #include <string>
+#include <unistd.h>
+
 
 std::map<std::string, std::string> FileServer::mimeTypes;
 
@@ -35,8 +37,9 @@ bool FileServer::getStat(const std::string &path, struct stat &st)
 	return true;
 }
 
-std::string FileServer::resolveStaticFilePath(const std::string &requestPath, const Location &location)
+ResolutionResult FileServer::resolveStaticFilePath(const std::string &requestPath, const Location &location)
 {
+	ResolutionResult result;
 	std::string full_fs_path = location.root;
 	std::string normalizedRequestPath = normalizePathInternal(requestPath);
 
@@ -51,17 +54,30 @@ std::string FileServer::resolveStaticFilePath(const std::string &requestPath, co
 	struct stat st;
 	if (!getStat(full_fs_path, st))
 	{
-		return ""; // Path does not exist or cannot be accessed
+		result.path = "";
+		result.pathType = ERROR;
+		result.statusCode = 404;
+		return result; // Path not found
+	}
+
+	if (access(full_fs_path.c_str(), R_OK) != 0)
+	{
+		result.path = "";
+		result.pathType = ERROR;
+		result.statusCode = 403;
+		return result; // Forbidden
 	}
 
 	if (S_ISREG(st.st_mode))
 	{
-		return full_fs_path;
+		result.path = full_fs_path;
+		result.pathType = STATIC_FILE;
+		result.statusCode = 200;
+		return result; // Found a regular file
 	}
 	else if (S_ISDIR(st.st_mode))
 	{
 		// It's a directory, try to find an index file
-
 		if (full_fs_path[full_fs_path.length() - 1] != '/')
 			full_fs_path += '/';
 
@@ -70,23 +86,34 @@ std::string FileServer::resolveStaticFilePath(const std::string &requestPath, co
 		{
 			std::string indexPath = full_fs_path + location.index_files[i];
 			struct stat index_st;
-			if (getStat(indexPath, index_st) && S_ISREG(index_st.st_mode))
-				return indexPath; // Found an index file from the list
+			if (getStat(indexPath, index_st) &&
+				S_ISREG(index_st.st_mode) &&
+				access(indexPath.c_str(), R_OK) == 0)
+			{
+				result.path = indexPath;
+				result.pathType = STATIC_FILE;
+				result.statusCode = 200;
+				return result; // Found an index file from the list
+			}
 		}
 
 		// If no index file found for a directory:
 		if (location.autoindex)
 		{
 			// Return the directory path itself, the caller will generate listing.
-			return full_fs_path;
+			result.path = full_fs_path;
+			result.pathType = DIRECTORY;
+			result.statusCode = 200;
 		}
 		else
 		{
 			// No index, no directory listing allowed (e.g., 403 Forbidden)
-			return "";
+			result.path = "";
+			result.pathType = ERROR;
+			result.statusCode = 403;
 		}
 	}
-	return ""; // Not a regular file or directory, return empty
+	return result;
 }
 
 std::string FileServer::readFileContent(const std::string &filePath)
@@ -168,6 +195,9 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 	listing += "</head><body>";
 	listing += "<h1>Index of " + directoryPath + "</h1><hr><pre>";
 
+	if (access(directoryPath.c_str(), R_OK) == 0) {
+		printf("Readable\n");
+	}
 	DIR *dir = opendir(directoryPath.c_str());
 	if (!dir)
 	{

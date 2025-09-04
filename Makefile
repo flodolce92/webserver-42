@@ -20,6 +20,7 @@ SRC			=	Server.cpp \
 				main.cpp \
 				ConfigParser.cpp \
 				ConfigManager.cpp \
+				Request.cpp \
 				Response.cpp \
 				CGIHandler.cpp \
 				FileServer.cpp

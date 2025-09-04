@@ -1,4 +1,5 @@
 #include <ConfigManager.hpp>
+#include <FileServer.hpp>
 #include <iostream>
 #include <stdexcept>
 #include <sys/stat.h>
@@ -33,6 +34,20 @@ const Location *ServerConfig::findMatchingLocation(const std::string &requestPat
 		}
 	}
 	return bestMatch;
+}
+
+ResolutionResult ServerConfig::getErrorPage(int code, const Location &location) const
+{
+	std::map<int, std::string>::const_iterator it = error_pages.find(code);
+	if (it != error_pages.end())
+		return FileServer::resolveStaticFilePath(it->second, location);
+
+	ResolutionResult empty;
+	empty.path = "";
+	empty.pathType = ERROR;
+	empty.statusCode = code;
+
+	return empty; // no custom error page found
 }
 
 ConfigManager::ConfigManager() : is_loaded(false), config_file_path("") {}
