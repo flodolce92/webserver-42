@@ -3,6 +3,8 @@
 #include <sstream>
 #include <algorithm>
 #include <string>
+#include <unistd.h>
+
 
 std::map<std::string, std::string> FileServer::mimeTypes;
 
@@ -193,6 +195,9 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 	listing += "</head><body>";
 	listing += "<h1>Index of " + directoryPath + "</h1><hr><pre>";
 
+	if (access(directoryPath.c_str(), R_OK) == 0) {
+		printf("Readable\n");
+	}
 	DIR *dir = opendir(directoryPath.c_str());
 	if (!dir)
 	{

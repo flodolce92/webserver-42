@@ -500,19 +500,6 @@ void Server::shutdown()
 	this->_shutdownRequested = true;
 }
 
-// static std::string createExampleResponse()
-// {
-// 	std::string response = "HTTP/1.1 200 OK\r\n";
-// 	response += "Content-Type: text/html\r\n";
-// 	response += "Connection: close\r\n";
-// 	response += "Content-Length: 12\r\n";
-// 	response += "\r\n";
-// 	response += "Hello World!";
-
-// 	return response;
-// }
-
-
 void Server::processRequest(int clientFd)
 {
 	ClientConnection *client = this->_clients[clientFd];
@@ -523,8 +510,9 @@ void Server::processRequest(int clientFd)
 	std::cout << "Client " << clientFd << "'s request: " << std::endl;
 	std::cout << client->getReadBuffer() << std::endl;
 	std::cout << "--------------------------" << std::endl;
-	// Response response(client, this->_configManager);
 	Request request(client->getReadBuffer());
-
 	client->setState(CONN_WRITING_RESPONSE);
+	Response response(this->_configManager, request);
+	client->appendToWriteBuffer(response.get());
+	client->writeData();
 }

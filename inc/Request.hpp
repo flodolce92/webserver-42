@@ -42,8 +42,11 @@ public:
 	const std::string &getVersion() const;
 	const std::map<std::string, std::string> &getHeaders() const;
 	const std::string &getBody() const;
+	const std::string &getrawRequest() const;
 	bool isValid() const;
 	bool isComplete() const;
+
+	std::string toString() const;
 };
 
 #endif

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>405 Method Not Allowed</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --muted: #6b7280;
+            --accent: #ef4444
+        }
+
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", sans-serif;
+            background: linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+            color: #111827;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .card {
+            max-width: 640px;
+            width: 100%;
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 6px 30px rgba(15, 23, 42, 0.08);
+            padding: 32px;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 28px;
+            color: var(--accent)
+        }
+
+        h2 {
+            margin: 8px 0 18px;
+            font-size: 18px;
+            color: #111827;
+            font-weight: 600
+        }
+
+        p {
+            margin: 0 0 16px;
+            color: var(--muted);
+            line-height: 1.5
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 18px
+        }
+
+        a.button {
+            display: inline-block;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            background: #111827;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08)
+        }
+
+        button.secondary {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #e6e9ee;
+            background: transparent;
+            color: #111827;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .code {
+            margin-top: 20px;
+            color: #374151;
+            font-weight: 700
+        }
+
+        @media (max-width:420px) {
+            .card {
+                padding: 20px
+            }
+
+            h1 {
+                font-size: 22px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="card" role="main" aria-labelledby="title">
+        <h1 id="title">405 — Method Not Allowed</h1>
+        <h2>That request method isn't supported here.</h2>
+        <p>
+            The server understood your request but the HTTP method used (e.g. POST, PUT, DELETE)
+            is not allowed for this resource. Try using the correct method or contact the API owner.
+        </p>
+
+        <div class="actions" role="group" aria-label="actions">
+            <a class="button" href="/" title="Go to homepage">Go to homepage</a>
+            <button class="secondary" onclick="history.back()">Go back</button>
+        </div>
+
+        <div class="code" aria-hidden="false">Error Code: 405</div>
+        <p style="margin-top:10px;font-size:13px;color:var(--muted)">
+            If you believe this is a mistake, please <a href="mailto:support@yourwebsite.com">contact support</a>.
+        </p>
+    </main>
+</body>
+
+</html>
