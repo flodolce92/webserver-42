@@ -12,7 +12,8 @@ Response::Response(
 							  _configManager(configManager),
 							  _server(NULL),
 							  _errorFound(false),
-							  _connectionError(false)
+							  _connectionError(false),
+							  _isCGIRequest(false)
 {
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
@@ -70,6 +71,7 @@ Response::Response(
 
 	if (configManager.isCGIRequest(*this->_matchedLocation, this->_filePath) == true)
 	{
+		this->_isCGIRequest = true;
 		this->handleCGI();
 		return;
 	}
@@ -173,7 +175,8 @@ void Response::handleCGI()
 	env_var["server_name"] = "Webserv/1.0";
 	env_var["query_string"] = this->_request.getQueryString();
 
-	CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
+	this->_body = CGIHandler::executeCGI(this->_filePath, this->_request.getBody(), env_var);
+	this->buildResponseContent();
 }
 
 void Response::handleGet()
@@ -325,9 +328,11 @@ void Response::buildResponseContent()
 
 	// Build content type
 	std::string contentType = "Content-Type: ";
+	if (this->_isCGIRequest)
+		this->mimeType = "text/html";
 	if (this->mimeType.size() == 0)
-		std::string mimeType = FileServer::getMimeType(this->_filePath);
-	contentType += mimeType;
+		this->mimeType = FileServer::getMimeType(this->_filePath);
+	contentType += this->mimeType;
 	contentType += "\r\n";
 
 	std::string connection = "Connection: ";
@@ -552,7 +557,7 @@ std::string Response::extractFileName()
 	{
 		std::string contentDisposition = this->_request.getrawRequest();
 		int fromFind = contentDisposition.find("Content-Disposition:");
-		int toFind = abs(contentDisposition.find("\r\n", fromFind) - fromFind);
+		int toFind = abs((long)contentDisposition.find("\r\n", fromFind) - fromFind);
 		std::string fileNameDirt = contentDisposition.substr(fromFind, toFind);
 
 		fromFind = fileNameDirt.find("filename=");

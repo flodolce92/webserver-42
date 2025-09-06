@@ -46,6 +46,9 @@ private:
 	bool _errorFound;
 	bool _connectionError;
 
+	// CGI Handling
+	bool _isCGIRequest;
+
 	// Method Handlers
 	void handleGet();
 	void handlePost();
