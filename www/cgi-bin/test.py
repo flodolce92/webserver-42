@@ -4,7 +4,6 @@ import os
 import sys
 from urllib.parse import parse_qs
 
-print("Content-Type: text/html\r\n")
 print("""
 <!DOCTYPE html>
 <html lang="it">
@@ -47,7 +46,7 @@ print("""
     <div class="container">
 """)
 
-query_string = os.environ.get("QUERY_STRING", "")
+query_string = os.environ.get("query_string", "")
 params = parse_qs(query_string)
 name = params.get('name', ['Guest'])[0]
 
@@ -60,8 +59,8 @@ for key, value in os.environ.items():
 
 print("</pre>")
 
-if os.environ.get("REQUEST_METHOD") == "POST":
-    content_length = int(os.environ.get("CONTENT_LENGTH", 0))
+if os.environ.get("request_method") == "POST":
+    content_length = int(os.environ.get("content-length", 0))
     if content_length > 0:
         post_data = sys.stdin.read(content_length)
         print("<h2>POST Data:</h2>")
