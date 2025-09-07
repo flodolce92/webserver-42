@@ -50,6 +50,16 @@ ResolutionResult ServerConfig::getErrorPage(int code, const Location &location) 
 	return empty; // no custom error page found
 }
 
+ResolutionResult ServerConfig::getEmptyResolutionResult(int code)
+{
+	ResolutionResult empty;
+	empty.path = "";
+	empty.pathType = ERROR;
+	empty.statusCode = code;
+
+	return empty; // no custom error page found
+}
+
 ConfigManager::ConfigManager() : is_loaded(false), config_file_path("") {}
 
 ConfigManager::~ConfigManager() {}

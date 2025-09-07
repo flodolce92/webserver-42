@@ -60,6 +60,8 @@ struct ServerConfig
 	// If no custom error page is found, empty path is returned,
 	// with statusCode set to the provided code and pathType set to ERROR.
 	ResolutionResult getErrorPage(int code, const Location &location) const;
+
+	static ResolutionResult getEmptyResolutionResult(int code);
 };
 
 // Main configuration structure
