@@ -165,7 +165,6 @@ void Server::run()
 	}
 
 	this->_running = true;
-	// _timeout.tv_sec set to 1s in constructor and re-copied in loop for select timeout
 	this->_timeout.tv_usec = 0;
 
 	while (this->_running && !this->_shutdownRequested && !_signalReceived)
@@ -534,8 +533,16 @@ void Server::processRequest(int clientFd)
 	std::cout << client->getReadBuffer() << std::endl;
 	std::cout << "--------------------------" << std::endl;
 	Request request(client->getReadBuffer());
+
+	// Manage keep-alive
+	if (request.getHeaderValues("connection").size() > 0)
+	{
+		// Potentially broken - to be fixed later if we care
+		client->setKeepAlive(request.getHeaderValues("connection")[0].find("keep-alive") != std::string::npos);
+	}
+
 	client->setState(CONN_WRITING_RESPONSE);
 	Response response(this->_configManager, request);
 	client->appendToWriteBuffer(response.get());
-	client->writeData();
+	this->handleClientWrite(client->getFd());
 }

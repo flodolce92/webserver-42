@@ -18,7 +18,8 @@ Response::Response(
 	// Initialize the Host and Port
 	if (this->initPortAndHost() == -1)
 	{
-		this->setErrorFilePathForStatus(StatusCodes::BAD_REQUEST);
+		this->_matchedLocation = NULL;
+		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
 		this->buildResponseContent();
 		return;
 	}
@@ -575,11 +576,15 @@ std::string Response::extractFileName()
 
 void Response::setErrorFilePathForStatus(StatusCodes::Code status)
 {
+	ResolutionResult result;
 	if (this->_errorFound == true)
 		return;
 	this->_status = status;
 	this->_errorFound = true;
-	ResolutionResult result = this->_server->getErrorPage(this->_status, *this->_matchedLocation);
+	if (!this->_server || !this->_matchedLocation)
+		result = ServerConfig::getEmptyResolutionResult(this->_status);
+	else
+		result = this->_server->getErrorPage(this->_status, *this->_matchedLocation);
 
 	// If a custom error page was found, use its path
 	// If no custom error page found, response should be a static error string
