@@ -193,6 +193,18 @@ void Response::handlePost()
 	std::string fileName = this->extractFileName();
 	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
 
+	// Should happen always, but checking just to be sure
+	if (this->_request.getHeaderValues("content-length").size() > 0)
+	{
+		size_t bodySize = ft_stoi(this->_request.getHeaderValues("content-length")[0]);
+		if (bodySize > this->_server->client_max_body_size)
+		{
+			this->setErrorFilePathForStatus(StatusCodes::PAYLOAD_TOO_LARGE);
+			this->buildResponseContent();
+			return;
+		}
+	}
+
 	if (access(fullPath.c_str(), F_OK) == 0)
 	{
 		this->setErrorFilePathForStatus(StatusCodes::CONFLICT);
