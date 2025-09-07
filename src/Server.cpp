@@ -31,7 +31,7 @@ static std::string toString(T value)
 	return oss.str();
 }
 
-Server::Server(const ConfigManager & configManager): _configManager(configManager)
+Server::Server(const ConfigManager &configManager) : _configManager(configManager)
 {
 
 	// I/O Multiplexing
@@ -78,29 +78,33 @@ bool Server::initialize()
 	signal(SIGTERM, signalHandler);
 	signal(SIGPIPE, SIG_IGN);
 
-	const std::vector<ServerConfig> & serverConfigs = this->_configManager.getServers();
-	if (serverConfigs.empty()) {
+	const std::vector<ServerConfig> &serverConfigs = this->_configManager.getServers();
+	if (serverConfigs.empty())
+	{
 		logError("No server configurations found.");
 	}
 
 	for (size_t i = 0; i < serverConfigs.size(); i++)
 	{
-		const ServerConfig & currentConfig = serverConfigs[i];
+		const ServerConfig &currentConfig = serverConfigs[i];
 		int listenFd = socket(AF_INET, SOCK_STREAM, 0);
-		if (listenFd < 0) {
+		if (listenFd < 0)
+		{
 			logError("Failed to create socket for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
 			return false;
 		}
 
 		// Set socket options for reuse address
-		if (setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &this->_REUSE_ADDR_OPT, sizeof(this->_REUSE_ADDR_OPT)) < 0) {
+		if (setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &this->_REUSE_ADDR_OPT, sizeof(this->_REUSE_ADDR_OPT)) < 0)
+		{
 			logError("Failed to set SO_REUSEADDR for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
 			close(listenFd);
 			return false;
 		}
 
 		// Set socket to non-blocking
-		if (!this->setNonBlocking(listenFd)) {
+		if (!this->setNonBlocking(listenFd))
+		{
 			logError("Failed to set non-blocking for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
 			close(listenFd);
 			return false;
@@ -119,21 +123,24 @@ bool Server::initialize()
 			host = currentConfig.host;
 
 		// Convert host string to network address (supports IP and localhost)
-        if (inet_pton(AF_INET, host.c_str(), &serverAddress.sin_addr) <= 0) {
-            logError("Invalid address or address not supported: " + currentConfig.host + ": " + strerror(errno));
-            close(listenFd);
-            return false;
-        }
+		if (inet_pton(AF_INET, host.c_str(), &serverAddress.sin_addr) <= 0)
+		{
+			logError("Invalid address or address not supported: " + currentConfig.host + ": " + strerror(errno));
+			close(listenFd);
+			return false;
+		}
 
 		// Bind the socket to the address and port
-		if (bind(listenFd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+		if (bind(listenFd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
+		{
 			logError("Failed to bind socket to " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
 			close(listenFd);
 			return false;
 		}
 
 		// Start listening for incoming connections
-		if (listen(listenFd, this->_MAX_CLIENT_CONN_QUEUE) < 0) {
+		if (listen(listenFd, this->_MAX_CLIENT_CONN_QUEUE) < 0)
+		{
 			logError("Failed to listen on socket for " + currentConfig.host + ":" + toString(currentConfig.port) + ": " + strerror(errno));
 			close(listenFd);
 			return false;
@@ -170,9 +177,10 @@ void Server::run()
 		struct timeval currentTimeout = this->_timeout;
 		int activity = select(this->_maxFd + 1, &this->_readFds, &this->_writeFds, &this->_exceptFds, &currentTimeout);
 
-		if (_signalReceived) {
-            break; // Exit loop on signal
-        }
+		if (_signalReceived)
+		{
+			break; // Exit loop on signal
+		}
 		if (activity < 0)
 		{
 			if (errno == EINTR)
@@ -207,9 +215,10 @@ bool Server::addClient(int clientFd)
 	// ClientConnection constructor takes an int fd
 	this->_clients[clientFd] = new ClientConnection(clientFd);
 	// Update maxFd if necessary
-    if (clientFd > _maxFd) {
-        _maxFd = clientFd;
-    }
+	if (clientFd > _maxFd)
+	{
+		_maxFd = clientFd;
+	}
 	return true;
 }
 
@@ -278,11 +287,13 @@ void Server::handleNewConnection(int listenFd) // Parameter added
 
 	// Add client to master read set
 	FD_SET(clientFd, &_masterReadFds);
-	if (clientFd > _maxFd) {
+	if (clientFd > _maxFd)
+	{
 		_maxFd = clientFd;
 	}
 
-	if (!addClient(clientFd)) {
+	if (!addClient(clientFd))
+	{
 		logError("Failed to add client " + toString(clientFd));
 		close(clientFd);
 		FD_CLR(clientFd, &_masterReadFds);
@@ -320,7 +331,8 @@ void Server::handleClientRead(int clientFd)
 		return;
 
 	// Read data from the client
-	if (!client->readData()) { // readData now returns false on EOF or real error
+	if (!client->readData())
+	{									// readData now returns false on EOF or real error
 		markClientForRemoval(clientFd); // Client wants to close or error occurred
 		return;
 	}
@@ -338,21 +350,26 @@ void Server::handleClientWrite(int clientFd)
 		return;
 
 	// Write data to the client
-	if (!client->writeData()) { // writeData now returns false on error
+	if (!client->writeData())
+	{									// writeData now returns false on error
 		markClientForRemoval(clientFd); // Error occurred during write
 		return;
 	}
 
 	// If all data is written, potentially transition state or prepare for next request
-	if (!client->hasDataToWrite()) {
+	if (!client->hasDataToWrite())
+	{
 		// Example: If not keep-alive, close connection, otherwise reset for next request
-		if (!client->isKeepAlive()) {
+		if (!client->isKeepAlive())
+		{
 			markClientForRemoval(clientFd);
-		} else {
+		}
+		else
+		{
 			// Reset client for next request in keep-alive scenario
 			client->setState(CONN_READING_REQUEST);
 			FD_CLR(clientFd, &_masterWriteFds); // Stop monitoring for write readiness
-			FD_SET(clientFd, &_masterReadFds);  // Start monitoring for read readiness
+			FD_SET(clientFd, &_masterReadFds);	// Start monitoring for read readiness
 		}
 	}
 }
@@ -364,7 +381,7 @@ void Server::cleanupTimedOutClients()
 
 	for (std::map<int, ClientConnection *>::iterator it = _clients.begin(); it != _clients.end(); ++it)
 	{
-		if (it->second->isTimedOut(_TIMEOUT_SECONDS))
+		if (it->second->isTimedOut(_TIMEOUT_SECONDS) && !this->isAlreadyMarkedForRemoval(it->first))
 		{
 			timedOutClients.push_back(it->first);
 		}
@@ -377,6 +394,11 @@ void Server::cleanupTimedOutClients()
 	}
 }
 
+bool Server::isAlreadyMarkedForRemoval(int clientFd)
+{
+	return std::find(this->_clientsToRemove.begin(), this->_clientsToRemove.end(), clientFd) != this->_clientsToRemove.end();
+}
+
 void Server::removeClient(int clientFd)
 {
 	std::map<int, ClientConnection *>::iterator it;
@@ -386,14 +408,14 @@ void Server::removeClient(int clientFd)
 		return;
 
 	// Remove from master fd_sets
-    FD_CLR(clientFd, &_masterReadFds);
-    FD_CLR(clientFd, &_masterWriteFds);
-    FD_CLR(clientFd, &_exceptFds); // Also clear from except set if used
+	FD_CLR(clientFd, &_masterReadFds);
+	FD_CLR(clientFd, &_masterWriteFds);
+	FD_CLR(clientFd, &_exceptFds); // Also clear from except set if used
 
 	std::cout << "Closing client connection: " << clientFd << std::endl;
-	delete it->second; // Delete the ClientConnection object
+	delete it->second;		  // Delete the ClientConnection object
 	this->_clients.erase(it); // Remove from map
-	close(clientFd); // Close the socket FD
+	close(clientFd);		  // Close the socket FD
 }
 
 void Server::logError(const std::string &message)
@@ -434,7 +456,8 @@ void Server::setupFdSets()
 
 	// Always Monitor Server Sockets for New Connections
 	std::map<int, const ServerConfig *>::iterator sit;
-	for (sit = this->_listeningSockets.begin(); sit != this->_listeningSockets.end(); sit++) {
+	for (sit = this->_listeningSockets.begin(); sit != this->_listeningSockets.end(); sit++)
+	{
 		int serverFd = sit->first;
 		FD_SET(serverFd, &this->_readFds);
 		this->_maxFd = serverFd;

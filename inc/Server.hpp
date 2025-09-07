@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <algorithm>
 
 class ClientConnection;
 class Buffer;
@@ -13,9 +14,9 @@ struct ServerConfig; // Forward declare ServerConfig
 
 class Server
 {
-	private:
+private:
 	// Server Config
-	const ConfigManager & _configManager;
+	const ConfigManager &_configManager;
 	std::map<int, const ServerConfig *> _listeningSockets; // Map listening FDs to their configs
 
 	// Network Configuration
@@ -60,6 +61,7 @@ class Server
 	void cleanupTimedOutClients();
 	void processClientRemovalQueue();
 	void processRequest(int clientFd); // This method is for HTTP parsing, removed as per request
+	bool isAlreadyMarkedForRemoval(int clientFd);
 
 	// I/O Multiplexing helpers
 	void setupFdSets();
@@ -69,9 +71,8 @@ class Server
 	void handleSocketError(int clientFd, const std::string &operation);
 	void logError(const std::string &message);
 
-
 public:
-	Server(const ConfigManager & configManager);
+	Server(const ConfigManager &configManager);
 	~Server();
 
 	// Lifecycle
