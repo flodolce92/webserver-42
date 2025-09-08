@@ -19,11 +19,6 @@ private:
 	const ConfigManager &_configManager;
 	std::map<int, const ServerConfig *> _listeningSockets; // Map listening FDs to their configs
 
-	// Network Configuration
-	// int _serverFd; // No longer a single serverFd
-	// int _serverPort; // No longer a single serverPort
-	// struct sockaddr_in _serverAddress; // No longer a single serverAddress
-
 	// Static Configuration
 	static const int _REUSE_ADDR_OPT;
 	static const int _MAX_CLIENT_CONN_QUEUE;
@@ -60,7 +55,7 @@ private:
 	void removeClient(int clientFd);
 	void cleanupTimedOutClients();
 	void processClientRemovalQueue();
-	void processRequest(int clientFd); // This method is for HTTP parsing, removed as per request
+	void processRequest(int clientFd, const std::string &rawRequest);
 	bool isAlreadyMarkedForRemoval(int clientFd);
 
 	// I/O Multiplexing helpers
@@ -70,6 +65,8 @@ private:
 	// Error Handling
 	void handleSocketError(int clientFd, const std::string &operation);
 	void logError(const std::string &message);
+
+	int totalRequestsCount;
 
 public:
 	Server(const ConfigManager &configManager);

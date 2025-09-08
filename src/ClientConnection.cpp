@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cerrno>
+#include <cmath>
 
 static time_t getCurrentTime()
 {
@@ -14,10 +15,9 @@ ClientConnection::ClientConnection(int fd)
 	: _fd(fd),
 	  _state(CONN_READING_REQUEST),
 	  _writeOffset(0),
-	  _headersParsed(false),
 	  _contentLength(0),
 	  _hasContentLength(false),
-	//   _isChunked(false),
+	  //   _isChunked(false),
 	  _keepAlive(false),
 	  _clientPort(0),
 	  _bytesRead(0),
@@ -123,7 +123,8 @@ bool ClientConnection::writeData()
 
 void ClientConnection::appendToWriteBuffer(const std::string &data)
 {
-	// TODO: Add some checks
+	if (this->_writeBuffer.empty())
+		this->_writeOffset = 0;
 	this->_writeBuffer.append(data);
 }
 
@@ -134,6 +135,7 @@ void ClientConnection::clearReadBuffer()
 
 void ClientConnection::clearWriteBuffer()
 {
+	this->_writeOffset = 0;
 	this->_writeBuffer.clear();
 }
 
@@ -171,36 +173,22 @@ bool ClientConnection::hasDataToWrite() const
 
 bool ClientConnection::hasCompleteRequest() const
 {
-	if (!this->_headersParsed)
-	{
-		// Look for End of Headers
-		size_t pos = this->_readBuffer.find("\r\n\r\n");
-		if (pos == std::string::npos)
-		{
-			// Headers Not Complete
-			return false;
-		}
+	size_t headerEnd = this->_readBuffer.find("\r\n\r\n");
+	if (headerEnd == std::string::npos)
+		return false; // no full headers yet
 
-		// Headers are complete, but we need to check if body is complete
-		// This is a simplified check - real implementation needs proper parsing
-		// TODO: Redirect to Michele
-		return true;
+	// Parse headers quickly to find Content-Length (simplified)
+	size_t contentLength = 0;
+	size_t pos = this->_readBuffer.find("Content-Length:");
+	if (pos != std::string::npos)
+	{
+		size_t end = this->_readBuffer.find("\r\n", pos);
+		std::string lenStr = this->_readBuffer.substr(pos + 15, end - (pos + 15));
+		contentLength = atoi(lenStr.c_str());
 	}
 
-	// If Headers Parsed, Check if Body is Complete
-	if (this->_hasContentLength)
-	{
-		// Simple content-length ckeck
-		size_t headerEnd = this->_readBuffer.find("\r\n\r\n");
-		if (headerEnd != std::string::npos)
-		{
-			size_t bodyStart = headerEnd + 4;
-			size_t bodyLength = this->_readBuffer.size() - bodyStart;
-			return bodyLength >= this->_contentLength;
-		}
-	}
-
-	return true; // Assume Complete for Now
+	size_t totalLength = headerEnd + 4 + contentLength;
+	return this->_readBuffer.size() >= totalLength;
 }
 
 // Timeout Checking
@@ -250,6 +238,16 @@ const std::string &ClientConnection::getClientIP() const
 int ClientConnection::getClientPort() const
 {
 	return this->_clientPort;
+}
+
+size_t ClientConnection::getContentLength() const
+{
+	return this->_contentLength;
+}
+
+bool ClientConnection::hasContentLength() const
+{
+	return this->_hasContentLength;
 }
 
 // Statistics
