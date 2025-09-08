@@ -5,13 +5,12 @@
 #include <string>
 #include <unistd.h>
 
-
 std::map<std::string, std::string> FileServer::mimeTypes;
 
 FileServer::FileServer() {}
 FileServer::~FileServer() {}
 
-static std::string normalizePathInternal(const std::string &path)
+std::string FileServer::normalizePath(const std::string &path)
 {
 	if (path.empty())
 		return "/";
@@ -41,7 +40,7 @@ ResolutionResult FileServer::resolveStaticFilePath(const std::string &requestPat
 {
 	ResolutionResult result;
 	std::string full_fs_path = location.root;
-	std::string normalizedRequestPath = normalizePathInternal(requestPath);
+	std::string normalizedRequestPath = normalizePath(requestPath);
 
 	if (location.root.length() > 1 || normalizedRequestPath != "/")
 	{
@@ -131,6 +130,50 @@ std::string FileServer::readFileContent(const std::string &filePath)
 	return buffer.str();
 }
 
+bool FileServer::saveFile(const std::string &filePath, const std::string &fileContent)
+{
+	// Check if the directory exists and is writable
+	std::string directoryPath = filePath.substr(0, filePath.find_last_of('/'));
+	struct stat st;
+	if (stat(directoryPath.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+	{
+		// Create the directory if it doesn't exist
+		if (mkdir(directoryPath.c_str(), 0755) != 0)
+			return false; // Failed to create directory
+	}
+	if (access(directoryPath.c_str(), W_OK) != 0)
+		return false; // Directory not writable
+
+	std::ofstream file(filePath.c_str(), std::ios::binary);
+	if (!file.is_open())
+		return false;
+
+	file.write(fileContent.c_str(), fileContent.length());
+	if (file.fail())
+	{
+		file.close();
+		return false;
+	}
+
+	file.close();
+	return true;
+}
+
+bool FileServer::deleteFile(const std::string &filePath)
+{
+	struct stat st;
+
+	// Check if the file exists and is a regular file
+	if (stat(filePath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+		return false;
+
+	// Attempt to delete the file
+	if (std::remove(filePath.c_str()) != 0)
+		return false;
+
+	return true; // File deleted successfully
+}
+
 void FileServer::initMimeTypes()
 {
 	if (!mimeTypes.empty())
@@ -182,26 +225,46 @@ std::string FileServer::getMimeType(const std::string &filePath)
 	return mimeTypes["default"];
 }
 
-std::string FileServer::generateDirectoryListing(const std::string &directoryPath)
+std::string FileServer::generateDirectoryListing(const std::string &directoryPath, const std::string &requestPath)
 {
-	std::string listing = "<html><head><title>Index of " + directoryPath + "</title>";
-	listing += "<style>";
-	listing += "body { font-family: monospace; background-color: #f0f0f0; color: #333; }";
-	listing += "h1 { color: #0056b3; }";
-	listing += "pre { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; }";
+	std::string listing;
+	listing += "<!DOCTYPE html><html><head><title>Index of " + requestPath + "</title>";
+	listing += "<style>body { font-family: monospace; background-color: #f0f0f0; margin: 20px; }";
+	listing += "h1 { color: #333; }";
+	listing += "table { width: 100%; border-collapse: collapse; }";
+	listing += "th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }";
+	listing += ".container { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; }";
 	listing += "a { color: #007bff; text-decoration: none; }";
 	listing += "a:hover { text-decoration: underline; }";
 	listing += "</style>";
 	listing += "</head><body>";
-	listing += "<h1>Index of " + directoryPath + "</h1><hr><pre>";
+	listing += "<h1>Index of " + requestPath + "</h1><hr>";
 
-	if (access(directoryPath.c_str(), R_OK) == 0) {
-		printf("Readable\n");
-	}
+	// Add JavaScript to handle DELETE requests
+	listing += "<script>";
+	listing += "function deleteFile(filePath) {";
+	listing += "  if (confirm('Are you sure you want to delete ' + filePath + '?')) {";
+	listing += "    fetch(filePath, { method: 'DELETE' })";
+	listing += "      .then(response => {";
+	listing += "        if (response.status === 204) {";
+	listing += "          alert('File deleted successfully.');";
+	listing += "          location.reload();";
+	listing += "        } else {";
+	listing += "          alert('Failed to delete file. Status: ' + response.status);";
+	listing += "        }";
+	listing += "      })";
+	listing += "      .catch(error => {";
+	listing += "        alert('Error: ' + error);";
+	listing += "      });";
+	listing += "  }";
+	listing += "}";
+	listing += "</script>";
+
+	listing += "<pre>"; // Start preformatted text block
 	DIR *dir = opendir(directoryPath.c_str());
 	if (!dir)
 	{
-		// std::cerr << "FileServer::generateDirectoryListing: Could not open directory: " << directoryPath << std::endl;
+		std::cerr << "FileServer::generateDirectoryListing: Could not open directory: " << directoryPath << std::endl;
 		return "<h1>Error: Could not list directory contents.</h1></body></html>";
 	}
 
@@ -209,10 +272,23 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 	while ((entry = readdir(dir)) != NULL)
 	{
 		std::string name = entry->d_name;
-		if (name == "." || name == "..")
+
+		if (name == ".")
+			continue;
+
+		if (name == "..")
 		{
-			if (name == "..")
-				listing += "<a href=\"../\">../</a>\n";
+			std::string parentPath = requestPath;
+			size_t lastSlashPos = parentPath.find_last_of('/', parentPath.length() - 2);
+			if (lastSlashPos != std::string::npos)
+			{
+				parentPath = parentPath.substr(0, lastSlashPos + 1);
+				listing += "<a href=\"" + parentPath + "\">../</a>\n";
+			}
+			else
+			{
+				listing += "<a href=\"/\">../</a>\n";
+			}
 			continue;
 		}
 
@@ -222,21 +298,29 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 		fullEntryPath += name;
 
 		struct stat st;
-		if (stat(fullEntryPath.c_str(), &st) == 0)
+		if (stat(fullEntryPath.c_str(), &st) != 0)
+			continue;
+
+		std::string linkPath = requestPath;
+		if (linkPath[linkPath.length() - 1] != '/')
+			linkPath += '/';
+		linkPath += name;
+
+		// Link and delete button for files, just link for directories
+		if (S_ISREG(st.st_mode))
 		{
-			if (S_ISDIR(st.st_mode))
-				name += "/"; // Append slash for directories
-			// Generate link relative to the current directory
-			listing += "<a href=\"" + name + "\">" + name + "</a>\n";
+			listing += "<a href=\"" + linkPath + "\">" + name + "</a>";
+			listing += "   <button onclick=\"deleteFile('" + linkPath + "')\">Delete</button>\n";
 		}
-		else
+		else if (S_ISDIR(st.st_mode))
 		{
-			// Fallback if stat fails for some reason (e.g., permissions)
-			listing += name + "\n";
+			linkPath += '/';
+			listing += "<a href=\"" + linkPath + "\">" + name + "/</a>\n";
 		}
 	}
-	closedir(dir);
 
+	closedir(dir);
 	listing += "</pre><hr></body></html>";
+
 	return listing;
 }

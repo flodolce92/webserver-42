@@ -44,9 +44,22 @@ public:
 	// Returns an empty string in case of file not found, access denied, or error.
 	static ResolutionResult resolveStaticFilePath(const std::string &requestPath, const Location &location);
 
+	// Normalizes a given file path.
+	// Handles leading/trailing slashes and resolves '..' and '.'
+	// to ensure paths are consistent before saving or retrieving files.
+	static std::string normalizePath(const std::string &path);
+
 	// Reads the content of a file from the specified path and returns it as a string.
 	// Returns an empty string in case of read error.
 	static std::string readFileContent(const std::string &filePath);
+
+	// Saves the given content to a file at the specified path.
+	// Returns true on success, false on failure.
+	static bool saveFile(const std::string &filePath, const std::string &fileContent);
+
+	// Deletes a file at the specified path.
+	// Returns true on success, false on failure.
+	static bool deleteFile(const std::string &filePath);
 
 	// Determines the MIME type of a file based on its extension.
 	// Useful for setting the Content-Type header of the HTTP response.
@@ -54,7 +67,7 @@ public:
 
 	// Generates an HTML string for the listing of a directory.
 	// Should be called only if resolveStaticFilePath returned a directory path and directory_listing is enabled.
-	static std::string generateDirectoryListing(const std::string &directoryPath);
+	static std::string generateDirectoryListing(const std::string &directoryPath, const std::string &requestPath);
 };
 
 #endif

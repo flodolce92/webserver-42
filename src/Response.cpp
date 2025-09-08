@@ -49,6 +49,14 @@ Response::Response(
 		return;
 	}
 
+	// Handle POST with upload
+	if (this->_request.getMethod() == "POST" && this->_matchedLocation && this->_matchedLocation->upload_enabled)
+	{
+		this->handlePost();
+		this->buildResponseContent();
+		return;
+	}
+
 	// Use getPath to trim query string
 	ResolutionResult result = FileServer::resolveStaticFilePath(this->_request.getPath(), *this->_matchedLocation);
 	this->_filePath = result.path;
@@ -61,10 +69,10 @@ Response::Response(
 		this->buildResponseContent();
 		return;
 	}
-	else if (result.pathType == DIRECTORY)
+	else if (result.pathType == DIRECTORY && this->getMethod() == "GET")
 	{
 		this->_status = StatusCodes::OK;
-		this->_body = FileServer::generateDirectoryListing(this->_filePath);
+		this->_body = FileServer::generateDirectoryListing(this->_filePath, this->_request.getPath());
 		this->mimeType = FileServer::getMimeType(".html");
 		this->buildResponseContent();
 		return;
@@ -166,8 +174,6 @@ void Response::handleRedirect()
 
 void Response::handleCGI()
 {
-	std::cout << "TODO: CGI REQUEST HANDLING!" << std::endl;
-
 	std::map<std::string, std::string> env_var = this->_request.getHeaders();
 	env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
 	env_var["script_filename"] = this->_filePath;
@@ -188,76 +194,46 @@ void Response::handleGet()
 
 void Response::handlePost()
 {
-	std::cout << "POST" << std::endl;
-
-	std::string fileName = this->extractFileName();
-	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
-
-	// Should happen always, but checking just to be sure
-	if (this->_request.getHeaderValues("content-length").size() > 0)
+	if (this->_request.getHeaders().count("content-type") &&
+		this->_request.getHeaders().at("content-type").find("multipart/form-data") != std::string::npos)
 	{
-		size_t bodySize = ft_stoi(this->_request.getHeaderValues("content-length")[0]);
-		if (bodySize > this->_server->client_max_body_size)
+		std::string fileName = this->_request.getUploadedFileName();
+		std::string fileContent = this->_request.getUploadedFileContent();
+
+		if (fileName.empty() || fileContent.empty())
 		{
-			this->setErrorFilePathForStatus(StatusCodes::PAYLOAD_TOO_LARGE);
-			this->buildResponseContent();
+			this->setErrorFilePathForStatus(StatusCodes::BAD_REQUEST);
 			return;
 		}
-	}
 
-	if (access(fullPath.c_str(), F_OK) == 0)
-	{
-		this->setErrorFilePathForStatus(StatusCodes::CONFLICT);
-		this->buildResponseContent();
-		return;
-	}
+		// Get the upload path from the matched location
+		std::string uploadPath = this->_matchedLocation->upload_path;
+		std::string fullPath = uploadPath + "/" + fileName;
 
-	std::ofstream newFile(fullPath.c_str(), std::ios::out | std::ios::binary);
-	if (newFile.is_open())
-	{
-		std::string newFileContent = this->_request.getBody();
-		std::cout << "[" << this->_request.getBody() << "]" << std::endl;
-		newFile.write(newFileContent.c_str(), newFileContent.length());
-		newFile.close();
-		this->setErrorFilePathForStatus(StatusCodes::CREATED);
-		this->buildResponseContent();
+		if (FileServer::saveFile(fullPath, fileContent))
+			this->setErrorFilePathForStatus(StatusCodes::CREATED);
+		else
+			this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
 	}
 	else
 	{
-		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
-		this->buildResponseContent();
+		this->setErrorFilePathForStatus(StatusCodes::NOT_IMPLEMENTED);
 	}
 }
 
 void Response::handleDelete()
 {
-	std::cout << "Delete" << std::endl;
-
-	std::string fileName = this->extractFileName();
-	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
-
-	// struct stat fileInfo;
-	struct stat fileInfo;
-
-	if (stat(fullPath.c_str(), &fileInfo) == -1)
-	{
-		this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
-		this->buildResponseContent();
-		return;
-	}
-
-	if (remove(fullPath.c_str()) == 0)
+	if (FileServer::deleteFile(this->_filePath))
 	{
 		this->_status = StatusCodes::NO_CONTENT;
-		this->_body = "";
-		buildResponseContent();
+		this->_body = "File deleted successfully.";
 	}
 	else
 	{
-		this->_status = StatusCodes::INTERNAL_SERVER_ERROR;
-		this->_filePath = this->_errorPageFilePath;
-		readFile();
+		this->_status = StatusCodes::NOT_FOUND;
+		this->setErrorFilePathForStatus(this->_status);
 	}
+	this->buildResponseContent();
 }
 
 void Response::handleUnsupported()

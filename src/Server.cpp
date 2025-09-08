@@ -365,11 +365,6 @@ void Server::handleClientRead(int clientFd)
 		// Process the request
 		this->processRequest(clientFd, rawRequest);
 	}
-
-	// // For now, we only handle reading. HTTP processing is for another teammate.
-	// // You might want to transition client state based on completion of raw read here.
-	// client->setState(CONN_PROCESSING_REQUEST); // Example state change, depends on further logic
-	// this->processRequest(clientFd);
 }
 
 void Server::handleClientWrite(int clientFd)
