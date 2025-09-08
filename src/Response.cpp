@@ -49,6 +49,14 @@ Response::Response(
 		return;
 	}
 
+	// Handle POST with upload
+	if (this->_request.getMethod() == "POST" && this->_matchedLocation && this->_matchedLocation->upload_enabled)
+	{
+		this->handlePost();
+		this->buildResponseContent();
+		return;
+	}
+
 	// Use getPath to trim query string
 	ResolutionResult result = FileServer::resolveStaticFilePath(this->_request.getPath(), *this->_matchedLocation);
 	this->_filePath = result.path;

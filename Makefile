@@ -58,9 +58,6 @@ $(OBJS_DIR)%.o:	$(SRCS_DIR)%.cpp | $(OBJS_DIR) $(INC_DIR)
 $(NAME):		$(OBJS_DIR) $(OBJS)
 				@echo "$(GREEN)Linking objects and creating $(NAME)...$(RESET)"
 				@$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS)
-				@echo "$(GREEN)Creating upload directory...$(RESET)"
-				@mkdir -p ./www/html/uploads
-				@echo "$(GREEN)Build complete!$(RESET)"
 
 # Clean object files
 clean:

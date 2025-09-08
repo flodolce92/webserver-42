@@ -137,18 +137,16 @@ bool FileServer::saveFile(const std::string &filePath, const std::string &fileCo
 	struct stat st;
 	if (stat(directoryPath.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
 	{
-		return false; // Directory does not exist or is not a directory
+		// Create the directory if it doesn't exist
+		if (mkdir(directoryPath.c_str(), 0755) != 0)
+			return false; // Failed to create directory
 	}
 	if (access(directoryPath.c_str(), W_OK) != 0)
-	{
 		return false; // Directory not writable
-	}
 
 	std::ofstream file(filePath.c_str(), std::ios::binary);
 	if (!file.is_open())
-	{
 		return false;
-	}
 
 	file.write(fileContent.c_str(), fileContent.length());
 	if (file.fail())
