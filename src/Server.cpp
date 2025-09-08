@@ -342,17 +342,6 @@ void Server::handleClientRead(int clientFd)
 
 	std::string &buffer = const_cast<std::string &>(client->getReadBuffer());
 
-	// Get current time for logging
-	time_t now = time(NULL);
-	char timeBuffer[80];
-	struct tm *timeInfo = localtime(&now);
-	strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
-	std::cout << "\n\n"
-			  << timeBuffer << std::endl;
-	std::cout << "Request[" << this->totalRequestsCount << "]'s buffer: " << std::endl;
-	std::cout << buffer << std::endl;
-	std::cout << std::endl;
-
 	// Process multiple requests if pipelined
 	while (client->hasCompleteRequest())
 	{
@@ -526,7 +515,7 @@ void Server::setupFdSets()
 	}
 }
 
-void Server::processFdSets() // No activity parameter needed
+void Server::processFdSets()
 {
 	for (int fd = 0; fd <= _maxFd; ++fd)
 	{
@@ -569,7 +558,14 @@ void Server::processRequest(int clientFd, const std::string &rawRequest)
 	if (!client)
 		return;
 
+	// Get current time for logging
+	time_t now = time(NULL);
+	char timeBuffer[80];
+	struct tm *timeInfo = localtime(&now);
+	strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
+
 	std::cout << "\n\n--------------------------" << std::endl;
+	std::cout << "Current time: " << timeBuffer << std::endl;
 	std::cout << "[" << this->totalRequestsCount << "] Client " << clientFd << "'s request:\n";
 	std::cout << rawRequest << std::endl;
 	std::cout << "--------------------------" << std::endl;

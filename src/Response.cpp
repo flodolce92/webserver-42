@@ -341,7 +341,7 @@ void Response::buildResponseContent()
 
 	// Build content type
 	std::string contentType = "Content-Type: ";
-	if (this->_isCGIRequest)
+	if (this->_isCGIRequest || this->_errorFound)
 		this->mimeType = "text/html";
 	if (this->mimeType.size() == 0)
 		this->mimeType = FileServer::getMimeType(this->_filePath);
