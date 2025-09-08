@@ -240,8 +240,29 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 	listing += "a:hover { text-decoration: underline; }";
 	listing += "</style>";
 	listing += "</head><body>";
-	listing += "<h1>Index of " + requestPath + "</h1><hr><pre>";
+	listing += "<h1>Index of " + requestPath + "</h1><hr>";
 
+	// Add JavaScript to handle DELETE requests
+	listing += "<script>";
+	listing += "function deleteFile(filePath) {";
+	listing += "  if (confirm('Are you sure you want to delete ' + filePath + '?')) {";
+	listing += "    fetch(filePath, { method: 'DELETE' })";
+	listing += "      .then(response => {";
+	listing += "        if (response.status === 204) {";
+	listing += "          alert('File deleted successfully.');";
+	listing += "          location.reload();";
+	listing += "        } else {";
+	listing += "          alert('Failed to delete file. Status: ' + response.status);";
+	listing += "        }";
+	listing += "      })";
+	listing += "      .catch(error => {";
+	listing += "        alert('Error: ' + error);";
+	listing += "      });";
+	listing += "  }";
+	listing += "}";
+	listing += "</script>";
+
+	listing += "<pre>"; // Start preformatted text block
 	DIR *dir = opendir(directoryPath.c_str());
 	if (!dir)
 	{
@@ -287,13 +308,17 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 			linkPath += '/';
 		linkPath += name;
 
-		if (S_ISDIR(st.st_mode))
+		// Link and delete button for files, just link for directories
+		if (S_ISREG(st.st_mode))
+		{
+			listing += "<a href=\"" + linkPath + "\">" + name + "</a>";
+			listing += "   <button onclick=\"deleteFile('" + linkPath + "')\">Delete</button>\n";
+		}
+		else if (S_ISDIR(st.st_mode))
+		{
 			linkPath += '/';
-
-		listing += "<a href=\"" + linkPath + "\">" + name;
-		if (S_ISDIR(st.st_mode))
-			listing += "/";
-		listing += "</a>\n";
+			listing += "<a href=\"" + linkPath + "\">" + name + "/</a>\n";
+		}
 	}
 
 	closedir(dir);

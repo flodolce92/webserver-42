@@ -218,12 +218,14 @@ void Response::handleDelete()
 	if (FileServer::deleteFile(this->_filePath))
 	{
 		this->_status = StatusCodes::NO_CONTENT;
+		this->_body = "File deleted successfully.";
 	}
 	else
 	{
 		this->_status = StatusCodes::NOT_FOUND;
 		this->setErrorFilePathForStatus(this->_status);
 	}
+	this->buildResponseContent();
 }
 
 void Response::handleUnsupported()
