@@ -57,6 +57,10 @@ public:
 	// Returns true on success, false on failure.
 	static bool saveFile(const std::string &filePath, const std::string &fileContent);
 
+	// Deletes a file at the specified path.
+	// Returns true on success, false on failure.
+	static bool deleteFile(const std::string &filePath);
+
 	// Determines the MIME type of a file based on its extension.
 	// Useful for setting the Content-Type header of the HTTP response.
 	static std::string getMimeType(const std::string &filePath);

@@ -161,6 +161,21 @@ bool FileServer::saveFile(const std::string &filePath, const std::string &fileCo
 	return true;
 }
 
+bool FileServer::deleteFile(const std::string &filePath)
+{
+	struct stat st;
+
+	// Check if the file exists and is a regular file
+	if (stat(filePath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+		return false;
+
+	// Attempt to delete the file
+	if (std::remove(filePath.c_str()) != 0)
+		return false;
+
+	return true; // File deleted successfully
+}
+
 void FileServer::initMimeTypes()
 {
 	if (!mimeTypes.empty())

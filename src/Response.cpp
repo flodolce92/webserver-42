@@ -215,32 +215,14 @@ void Response::handlePost()
 
 void Response::handleDelete()
 {
-	std::cout << "Delete" << std::endl;
-
-	std::string fileName = this->extractFileName();
-	std::string fullPath = this->_matchedLocation->root + "/" + fileName;
-
-	// struct stat fileInfo;
-	struct stat fileInfo;
-
-	if (stat(fullPath.c_str(), &fileInfo) == -1)
-	{
-		this->setErrorFilePathForStatus(StatusCodes::NOT_FOUND);
-		this->buildResponseContent();
-		return;
-	}
-
-	if (remove(fullPath.c_str()) == 0)
+	if (FileServer::deleteFile(this->_filePath))
 	{
 		this->_status = StatusCodes::NO_CONTENT;
-		this->_body = "";
-		buildResponseContent();
 	}
 	else
 	{
-		this->_status = StatusCodes::INTERNAL_SERVER_ERROR;
-		this->_filePath = this->_errorPageFilePath;
-		readFile();
+		this->_status = StatusCodes::NOT_FOUND;
+		this->setErrorFilePathForStatus(this->_status);
 	}
 }
 
