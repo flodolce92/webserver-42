@@ -317,12 +317,9 @@ void Response::readFileError()
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
 	{
 		std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;
-		this->setErrorFilePathForStatus(StatusCodes::INTERNAL_SERVER_ERROR);
+		this->setErrorFilePathForStatus(this->_status);
 		this->_connectionError = true;
-		this->_body = "<!DOCTYPE html><html><head><title>Error</title><style>body { font-family: sans-serif; text-align: center; margin-top: \
-			50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } \
-			h1 { color: #d9534f; }</style></head><body><div class='container'><h1>500 Internal Server Error</h1><p> \
-			The server encountered an unexpected condition that prevented it from fulfilling the request.</p></div></body></html>";
+		this->_body = this->generateDynamicErrorPageBody();
 		return;
 	}
 
@@ -341,7 +338,7 @@ void Response::buildResponseContent()
 
 	// Build content type
 	std::string contentType = "Content-Type: ";
-	if (this->_isCGIRequest)
+	if (this->_isCGIRequest || this->_errorFound)
 		this->mimeType = "text/html";
 	if (this->mimeType.size() == 0)
 		this->mimeType = FileServer::getMimeType(this->_filePath);
@@ -604,4 +601,19 @@ void Response::setErrorFilePathForStatus(StatusCodes::Code status)
 		this->_filePath = result.path;
 	else
 		this->_filePath = "";
+}
+
+std::string Response::generateDynamicErrorPageBody() const
+{
+	std::ostringstream oss;
+	std::string message = StatusCodes::getMessage(this->_status);
+	int statusCode = static_cast<int>(this->_status);
+
+	oss << "<!DOCTYPE html><html><head><title>Error " << statusCode << "</title><style>body { font-family: sans-serif; text-align: center; margin-top: \
+			50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } \
+			h1 { color: #d9534f; }</style></head><body><div class='container'><h1>"
+		<< statusCode << " " << message << "</h1><p> \
+			The server encountered an unexpected condition that prevented it from fulfilling the request.</p></div></body></html>";
+
+	return oss.str();
 }

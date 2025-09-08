@@ -27,7 +27,6 @@ private:
 	size_t _writeOffset;
 
 	// HTTP Parsing State
-	bool _headersParsed;
 	size_t _contentLength;
 	bool _hasContentLength;
 	// bool _isChunked;
@@ -84,11 +83,13 @@ public:
 	size_t getBytesWritten() const;
 	int getRequestCount() const;
 	void incrementRequestCount();
+	size_t getContentLength() const;
 
 	// Helper Methods for Server Class
 	bool needsRead() const;
 	bool needsWrite() const;
 	bool shouldClose() const;
+	bool hasContentLength() const;
 };
 
 #endif

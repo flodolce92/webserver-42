@@ -53,6 +53,8 @@ Server::Server(const ConfigManager &configManager) : _configManager(configManage
 	// Connections
 	this->_clients = std::map<int, ClientConnection *>();
 	this->_listeningSockets = std::map<int, const ServerConfig *>();
+
+	this->totalRequestsCount = 0;
 }
 
 Server::~Server()
@@ -329,6 +331,8 @@ void Server::handleClientRead(int clientFd)
 	if (!client)
 		return;
 
+	this->totalRequestsCount++;
+
 	// Read data from the client
 	if (!client->readData())
 	{									// readData now returns false on EOF or real error
@@ -336,10 +340,36 @@ void Server::handleClientRead(int clientFd)
 		return;
 	}
 
-	// For now, we only handle reading. HTTP processing is for another teammate.
-	// You might want to transition client state based on completion of raw read here.
-	client->setState(CONN_PROCESSING_REQUEST); // Example state change, depends on further logic
-	this->processRequest(clientFd);
+	std::string &buffer = const_cast<std::string &>(client->getReadBuffer());
+
+	// Process multiple requests if pipelined
+	while (client->hasCompleteRequest())
+	{
+		// Find end of headers
+		size_t headerEnd = buffer.find("\r\n\r\n");
+		std::string rawRequest = buffer.substr(0, headerEnd + 4);
+
+		// If there’s a body, extract it too
+		size_t bodyLength = 0;
+		size_t bodyStart = headerEnd + 4;
+		if (client->hasContentLength())
+		{ // you can expose a getter
+			bodyLength = client->getContentLength();
+		}
+		if (buffer.size() < bodyStart + bodyLength)
+			break;
+
+		rawRequest = buffer.substr(0, bodyStart + bodyLength);
+		buffer.erase(0, bodyStart + bodyLength); // remove processed request
+
+		// Process the request
+		this->processRequest(clientFd, rawRequest);
+	}
+
+	// // For now, we only handle reading. HTTP processing is for another teammate.
+	// // You might want to transition client state based on completion of raw read here.
+	// client->setState(CONN_PROCESSING_REQUEST); // Example state change, depends on further logic
+	// this->processRequest(clientFd);
 }
 
 void Server::handleClientWrite(int clientFd)
@@ -485,7 +515,7 @@ void Server::setupFdSets()
 	}
 }
 
-void Server::processFdSets() // No activity parameter needed
+void Server::processFdSets()
 {
 	for (int fd = 0; fd <= _maxFd; ++fd)
 	{
@@ -522,23 +552,31 @@ void Server::shutdown()
 	this->_shutdownRequested = true;
 }
 
-void Server::processRequest(int clientFd)
+void Server::processRequest(int clientFd, const std::string &rawRequest)
 {
 	ClientConnection *client = this->_clients[clientFd];
-
 	if (!client)
 		return;
-	std::cout << "\n\n--------------------------" << std::endl;
-	std::cout << "Client " << clientFd << "'s request: " << std::endl;
-	std::cout << client->getReadBuffer() << std::endl;
-	std::cout << "--------------------------" << std::endl;
-	Request request(client->getReadBuffer());
 
-	// Manage keep-alive
-	if (request.getHeaderValues("connection").size() > 0)
+	// Get current time for logging
+	time_t now = time(NULL);
+	char timeBuffer[80];
+	struct tm *timeInfo = localtime(&now);
+	strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
+
+	std::cout << "\n\n--------------------------" << std::endl;
+	std::cout << "Current time: " << timeBuffer << std::endl;
+	std::cout << "[" << this->totalRequestsCount << "] Client " << clientFd << "'s request:\n";
+	std::cout << rawRequest << std::endl;
+	std::cout << "--------------------------" << std::endl;
+
+	Request request(rawRequest);
+
+	// Keep-Alive handling
+	if (!request.getHeaderValues("connection").empty())
 	{
-		// Potentially broken - to be fixed later if we care
-		client->setKeepAlive(request.getHeaderValues("connection")[0].find("keep-alive") != std::string::npos);
+		client->setKeepAlive(
+			request.getHeaderValues("connection")[0].find("keep-alive") != std::string::npos);
 	}
 
 	client->setState(CONN_WRITING_RESPONSE);
