@@ -186,8 +186,8 @@ void Response::handleGet()
 
 void Response::handlePost()
 {
-	if (this->_request.getHeaders().count("Content-Type") &&
-		this->_request.getHeaders().at("Content-Type").find("multipart/form-data") != std::string::npos)
+	if (this->_request.getHeaders().count("content-type") &&
+		this->_request.getHeaders().at("content-type").find("multipart/form-data") != std::string::npos)
 	{
 		std::string fileName = this->_request.getUploadedFileName();
 		std::string fileContent = this->_request.getUploadedFileContent();
@@ -200,7 +200,9 @@ void Response::handlePost()
 
 		// Get the upload path from the matched location
 		std::string uploadPath = this->_matchedLocation->upload_path;
-		std::string fullPath = FileServer::normalizePath(uploadPath + "/" + fileName);
+
+		// TODO: @Fede take a look at this normalized path, it leads to weird path like: "/./www/html/uploads" instead of "./www/html/uploads"
+		std::string fullPath = uploadPath + "/" + fileName; // FileServer::normalizePath(uploadPath + "/" + fileName);
 
 		if (FileServer::saveFile(fullPath, fileContent))
 			this->setErrorFilePathForStatus(StatusCodes::CREATED);
