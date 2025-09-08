@@ -342,29 +342,31 @@ void Server::handleClientRead(int clientFd)
 
 	std::string &buffer = const_cast<std::string &>(client->getReadBuffer());
 
-	// Process multiple requests if pipelined
-	while (client->hasCompleteRequest())
-	{
-		// Find end of headers
-		size_t headerEnd = buffer.find("\r\n\r\n");
-		std::string rawRequest = buffer.substr(0, headerEnd + 4);
+	// // Process multiple requests if pipelined
+	// while (client->hasCompleteRequest())
+	// {
+	// 	// Find end of headers
+	// 	size_t headerEnd = buffer.find("\r\n\r\n");
+	// 	std::string rawRequest = buffer.substr(0, headerEnd + 4);
 
-		// If there’s a body, extract it too
-		size_t bodyLength = 0;
-		size_t bodyStart = headerEnd + 4;
-		if (client->hasContentLength())
-		{ // you can expose a getter
-			bodyLength = client->getContentLength();
-		}
-		if (buffer.size() < bodyStart + bodyLength)
-			break;
+	// 	// If there’s a body, extract it too
+	// 	size_t bodyLength = 0;
+	// 	size_t bodyStart = headerEnd + 4;
+	// 	if (client->hasContentLength())
+	// 	{ // you can expose a getter
+	// 		bodyLength = client->getContentLength();
+	// 	}
+	// 	if (buffer.size() < bodyStart + bodyLength)
+	// 		break;
 
-		rawRequest = buffer.substr(0, bodyStart + bodyLength);
-		buffer.erase(0, bodyStart + bodyLength); // remove processed request
+	// 	rawRequest = buffer.substr(0, bodyStart + bodyLength);
+	// 	buffer.erase(0, bodyStart + bodyLength); // remove processed request
 
-		// Process the request
-		this->processRequest(clientFd, rawRequest);
-	}
+	// 	// Process the request
+	// 	this->processRequest(clientFd, rawRequest);
+	// }
+	client->setState(CONN_PROCESSING_REQUEST);
+	this->processRequest(clientFd, buffer);
 
 	// // For now, we only handle reading. HTTP processing is for another teammate.
 	// // You might want to transition client state based on completion of raw read here.

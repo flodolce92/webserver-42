@@ -18,12 +18,15 @@ private:
 	std::string _version;
 	std::map<std::string, std::string> _headers;
 	std::string _body;
+	std::string _uploadedFileName;
+	std::string _uploadedFileContent;
 	bool _isValid;
 	bool _isComplete;
 
 	void parseFirstLine();
 	void parseHeaders();
 	void parseBody();
+	void parseMultipartBody(const std::string &contentType);
 
 public:
 	Request(const std::string &rawRequest);
@@ -43,6 +46,8 @@ public:
 	const std::map<std::string, std::string> &getHeaders() const;
 	const std::string &getBody() const;
 	const std::string &getrawRequest() const;
+	const std::string &getUploadedFileName() const;
+	const std::string &getUploadedFileContent() const;
 	bool isValid() const;
 	bool isComplete() const;
 

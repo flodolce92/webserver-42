@@ -5,13 +5,12 @@
 #include <string>
 #include <unistd.h>
 
-
 std::map<std::string, std::string> FileServer::mimeTypes;
 
 FileServer::FileServer() {}
 FileServer::~FileServer() {}
 
-static std::string normalizePathInternal(const std::string &path)
+std::string FileServer::normalizePath(const std::string &path)
 {
 	if (path.empty())
 		return "/";
@@ -41,7 +40,7 @@ ResolutionResult FileServer::resolveStaticFilePath(const std::string &requestPat
 {
 	ResolutionResult result;
 	std::string full_fs_path = location.root;
-	std::string normalizedRequestPath = normalizePathInternal(requestPath);
+	std::string normalizedRequestPath = normalizePath(requestPath);
 
 	if (location.root.length() > 1 || normalizedRequestPath != "/")
 	{
@@ -131,6 +130,37 @@ std::string FileServer::readFileContent(const std::string &filePath)
 	return buffer.str();
 }
 
+bool FileServer::saveFile(const std::string &filePath, const std::string &fileContent)
+{
+	// Check if the directory exists and is writable
+	std::string directoryPath = filePath.substr(0, filePath.find_last_of('/'));
+	struct stat st;
+	if (stat(directoryPath.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+	{
+		return false; // Directory does not exist or is not a directory
+	}
+	if (access(directoryPath.c_str(), W_OK) != 0)
+	{
+		return false; // Directory not writable
+	}
+
+	std::ofstream file(filePath.c_str(), std::ios::binary);
+	if (!file.is_open())
+	{
+		return false;
+	}
+
+	file.write(fileContent.c_str(), fileContent.length());
+	if (file.fail())
+	{
+		file.close();
+		return false;
+	}
+
+	file.close();
+	return true;
+}
+
 void FileServer::initMimeTypes()
 {
 	if (!mimeTypes.empty())
@@ -195,7 +225,8 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 	listing += "</head><body>";
 	listing += "<h1>Index of " + directoryPath + "</h1><hr><pre>";
 
-	if (access(directoryPath.c_str(), R_OK) == 0) {
+	if (access(directoryPath.c_str(), R_OK) == 0)
+	{
 		printf("Readable\n");
 	}
 	DIR *dir = opendir(directoryPath.c_str());

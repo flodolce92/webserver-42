@@ -96,31 +96,87 @@ void Request::parseHeaders()
 
 void Request::parseBody()
 {
-	if (_headers.count("content-length"))
-	{
-		char *end;
-		errno = 0;
-		unsigned long contentLength = strtoul(_headers.at("content-length").c_str(), &end, 10);
+	// Check Content-Type header to know how to parse the body
+	std::string contentType;
+	if (this->getHeaders().count("content-type"))
+		contentType = this->getHeaders().at("content-type");
 
-		if (errno == ERANGE || *end != '\0')
+	if (contentType.find("multipart/form-data") != std::string::npos)
+	{
+		// File upload handling
+		parseMultipartBody(contentType);
+	}
+	else
+	{
+		std::stringstream ss;
+		ss << _iss.rdbuf();
+		_body = ss.str();
+	}
+	_isComplete = true;
+	_isValid = true;
+}
+
+void Request::parseMultipartBody(const std::string &contentType)
+{
+	// Extracting the boundary string to delimit parts
+	size_t boundaryPos = contentType.find("boundary=");
+	if (boundaryPos == std::string::npos)
+	{
+		_isValid = false;
+		return;
+	}
+	std::string boundary = "--" + contentType.substr(boundaryPos + 9);
+
+	// Reading the complete multipart body
+	std::stringstream ss;
+	ss << _iss.rdbuf();
+	std::string rawBody = ss.str();
+
+	// DEBUG print of rawBody in red
+	std::cerr << "\033[31m" << rawBody << "\033[0m";
+
+	// Finding the beginning and end of the file part
+	size_t startPos = rawBody.find(boundary);
+	if (startPos == std::string::npos)
+	{
+		_isValid = false;
+		return;
+	}
+
+	size_t endPos;
+	while (startPos != std::string::npos)
+	{
+		startPos = rawBody.find("\r\n\r\n", startPos) + 4; // Move past the part headers
+
+		endPos = rawBody.find(boundary, startPos);
+		if (endPos == std::string::npos)
 		{
 			_isValid = false;
 			return;
 		}
 
-		size_t bodyStartPos = _iss.tellg();
-		size_t rawLength = _rawRequest.length();
+		// Extracting the headers for the current part
+		std::string partHeaders = rawBody.substr(rawBody.find(boundary) + boundary.length() + 2, startPos - (rawBody.find(boundary) + boundary.length() + 2));
 
-		if (rawLength >= bodyStartPos + contentLength)
+		// Checking if this part contains a file
+		if (partHeaders.find("filename=") != std::string::npos)
 		{
-			_body = _rawRequest.substr(bodyStartPos, contentLength);
-			_isComplete = true;
+			// Extracting the filename
+			size_t filenamePos = partHeaders.find("filename=");
+			size_t filenameStart = partHeaders.find("\"", filenamePos) + 1;
+			size_t filenameEnd = partHeaders.find("\"", filenameStart);
+			_uploadedFileName = partHeaders.substr(filenameStart, filenameEnd - filenameStart);
+
+			// Extracting the file content
+			_uploadedFileContent = rawBody.substr(startPos, endPos - startPos);
+
+			_isValid = true;
+			return;
 		}
-		else
-			_isComplete = false;
+		startPos = endPos;
 	}
-	else
-		_isComplete = true;
+
+	_isValid = true;
 }
 
 // Getters
@@ -132,6 +188,8 @@ const std::string &Request::getVersion() const { return _version; }
 const std::map<std::string, std::string> &Request::getHeaders() const { return _headers; }
 const std::string &Request::getBody() const { return _body; }
 const std::string &Request::getrawRequest() const { return _rawRequest; }
+const std::string &Request::getUploadedFileName() const { return _uploadedFileName; }
+const std::string &Request::getUploadedFileContent() const { return _uploadedFileContent; }
 bool Request::isValid() const { return _isValid; }
 bool Request::isComplete() const { return _isComplete; }
 
