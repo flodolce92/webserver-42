@@ -23,7 +23,8 @@ SRC			=	Server.cpp \
 				Request.cpp \
 				Response.cpp \
 				CGIHandler.cpp \
-				FileServer.cpp
+				FileServer.cpp \
+				StatusCodes.cpp
 SRCS		=	$(addprefix $(SRCS_DIR), $(SRC))
 OBJS		=	$(addprefix $(OBJS_DIR), $(SRC:.cpp=.o))
 

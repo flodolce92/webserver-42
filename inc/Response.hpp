@@ -78,6 +78,8 @@ private:
 	void readFile();
 	void readFileError();
 
+	std::string generateDynamicErrorPageBody() const;
+
 public:
 	Response(const ConfigManager &configManager, const Request &request);
 	Response(const Response &src);
