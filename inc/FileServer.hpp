@@ -63,7 +63,7 @@ public:
 
 	// Generates an HTML string for the listing of a directory.
 	// Should be called only if resolveStaticFilePath returned a directory path and directory_listing is enabled.
-	static std::string generateDirectoryListing(const std::string &directoryPath);
+	static std::string generateDirectoryListing(const std::string &directoryPath, const std::string &requestPath);
 };
 
 #endif

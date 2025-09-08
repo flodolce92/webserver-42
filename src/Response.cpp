@@ -64,7 +64,7 @@ Response::Response(
 	else if (result.pathType == DIRECTORY && this->getMethod() == "GET")
 	{
 		this->_status = StatusCodes::OK;
-		this->_body = FileServer::generateDirectoryListing(this->_filePath);
+		this->_body = FileServer::generateDirectoryListing(this->_filePath, this->_request.getPath());
 		this->mimeType = FileServer::getMimeType(".html");
 		this->buildResponseContent();
 		return;
@@ -200,9 +200,7 @@ void Response::handlePost()
 
 		// Get the upload path from the matched location
 		std::string uploadPath = this->_matchedLocation->upload_path;
-
-		// TODO: @Fede take a look at this normalized path, it leads to weird path like: "/./www/html/uploads" instead of "./www/html/uploads"
-		std::string fullPath = uploadPath + "/" + fileName; // FileServer::normalizePath(uploadPath + "/" + fileName);
+		std::string fullPath = uploadPath + "/" + fileName;
 
 		if (FileServer::saveFile(fullPath, fileContent))
 			this->setErrorFilePathForStatus(StatusCodes::CREATED);

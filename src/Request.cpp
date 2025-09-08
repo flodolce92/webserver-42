@@ -132,9 +132,6 @@ void Request::parseMultipartBody(const std::string &contentType)
 	ss << _iss.rdbuf();
 	std::string rawBody = ss.str();
 
-	// DEBUG print of rawBody in red
-	std::cerr << "\033[31m" << rawBody << "\033[0m";
-
 	// Finding the beginning and end of the file part
 	size_t startPos = rawBody.find(boundary);
 	if (startPos == std::string::npos)

@@ -212,27 +212,25 @@ std::string FileServer::getMimeType(const std::string &filePath)
 	return mimeTypes["default"];
 }
 
-std::string FileServer::generateDirectoryListing(const std::string &directoryPath)
+std::string FileServer::generateDirectoryListing(const std::string &directoryPath, const std::string &requestPath)
 {
-	std::string listing = "<html><head><title>Index of " + directoryPath + "</title>";
-	listing += "<style>";
-	listing += "body { font-family: monospace; background-color: #f0f0f0; color: #333; }";
-	listing += "h1 { color: #0056b3; }";
-	listing += "pre { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; }";
+	std::string listing;
+	listing += "<!DOCTYPE html><html><head><title>Index of " + requestPath + "</title>";
+	listing += "<style>body { font-family: monospace; background-color: #f0f0f0; margin: 20px; }";
+	listing += "h1 { color: #333; }";
+	listing += "table { width: 100%; border-collapse: collapse; }";
+	listing += "th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }";
+	listing += ".container { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; }";
 	listing += "a { color: #007bff; text-decoration: none; }";
 	listing += "a:hover { text-decoration: underline; }";
 	listing += "</style>";
 	listing += "</head><body>";
-	listing += "<h1>Index of " + directoryPath + "</h1><hr><pre>";
+	listing += "<h1>Index of " + requestPath + "</h1><hr><pre>";
 
-	if (access(directoryPath.c_str(), R_OK) == 0)
-	{
-		printf("Readable\n");
-	}
 	DIR *dir = opendir(directoryPath.c_str());
 	if (!dir)
 	{
-		// std::cerr << "FileServer::generateDirectoryListing: Could not open directory: " << directoryPath << std::endl;
+		std::cerr << "FileServer::generateDirectoryListing: Could not open directory: " << directoryPath << std::endl;
 		return "<h1>Error: Could not list directory contents.</h1></body></html>";
 	}
 
@@ -240,10 +238,23 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 	while ((entry = readdir(dir)) != NULL)
 	{
 		std::string name = entry->d_name;
-		if (name == "." || name == "..")
+
+		if (name == ".")
+			continue;
+
+		if (name == "..")
 		{
-			if (name == "..")
-				listing += "<a href=\"../\">../</a>\n";
+			std::string parentPath = requestPath;
+			size_t lastSlashPos = parentPath.find_last_of('/', parentPath.length() - 2);
+			if (lastSlashPos != std::string::npos)
+			{
+				parentPath = parentPath.substr(0, lastSlashPos + 1);
+				listing += "<a href=\"" + parentPath + "\">../</a>\n";
+			}
+			else
+			{
+				listing += "<a href=\"/\">../</a>\n";
+			}
 			continue;
 		}
 
@@ -253,21 +264,25 @@ std::string FileServer::generateDirectoryListing(const std::string &directoryPat
 		fullEntryPath += name;
 
 		struct stat st;
-		if (stat(fullEntryPath.c_str(), &st) == 0)
-		{
-			if (S_ISDIR(st.st_mode))
-				name += "/"; // Append slash for directories
-			// Generate link relative to the current directory
-			listing += "<a href=\"" + name + "\">" + name + "</a>\n";
-		}
-		else
-		{
-			// Fallback if stat fails for some reason (e.g., permissions)
-			listing += name + "\n";
-		}
-	}
-	closedir(dir);
+		if (stat(fullEntryPath.c_str(), &st) != 0)
+			continue;
 
+		std::string linkPath = requestPath;
+		if (linkPath[linkPath.length() - 1] != '/')
+			linkPath += '/';
+		linkPath += name;
+
+		if (S_ISDIR(st.st_mode))
+			linkPath += '/';
+
+		listing += "<a href=\"" + linkPath + "\">" + name;
+		if (S_ISDIR(st.st_mode))
+			listing += "/";
+		listing += "</a>\n";
+	}
+
+	closedir(dir);
 	listing += "</pre><hr></body></html>";
+
 	return listing;
 }
