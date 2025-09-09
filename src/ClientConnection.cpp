@@ -81,11 +81,6 @@ bool ClientConnection::writeData()
 
 	if (bytesWritten < 0)
 	{
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-		{
-			// Socket buffer full, try again later
-			return true;
-		}
 		// Real Error
 		this->setState(CONN_ERROR);
 		return false;
