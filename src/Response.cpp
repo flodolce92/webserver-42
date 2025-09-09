@@ -588,8 +588,7 @@ std::string Response::generateDynamicErrorPageBody() const
 	oss << "<!DOCTYPE html><html><head><title>Error " << statusCode << "</title><style>body { font-family: sans-serif; text-align: center; margin-top: \
 			50px; background-color: #f2f2f2; } .container { padding: 20px; border-radius: 10px; background-color: white; display: inline-block; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); } \
 			h1 { color: #d9534f; }</style></head><body><div class='container'><h1>"
-		<< statusCode << " " << message << "</h1><p> \
-			The server encountered an unexpected condition that prevented it from fulfilling the request.</p></div></body></html>";
+		<< statusCode << " " << message << "</div></body></html>";
 
 	return oss.str();
 }
