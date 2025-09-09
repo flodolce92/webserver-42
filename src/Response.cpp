@@ -290,6 +290,12 @@ void Response::readFile()
 void Response::readFileError()
 {
 	struct stat fileInfo;
+
+	if (this->_status == StatusCodes::CREATED) {
+		this->_body = this->generateDynamicErrorPageBody();
+		return ;
+	}
+
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
 	{
 		std::cerr << "Error getting file stats for '" << this->_filePath << "': " << strerror(errno) << std::endl;

@@ -559,13 +559,14 @@ void Server::processRequest(int clientFd, const std::string &rawRequest)
 	struct tm *timeInfo = localtime(&now);
 	strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
 
-	std::cout << "\n\n--------------------------" << std::endl;
-	std::cout << "Current time: " << timeBuffer << std::endl;
-	std::cout << "[" << this->totalRequestsCount << "] Client " << clientFd << "'s request:\n";
-	std::cout << rawRequest << std::endl;
-	std::cout << "--------------------------" << std::endl;
+	// std::cout << "\n\n--------------------------" << std::endl;
+	// std::cout << "Current time: " << timeBuffer << std::endl;
+	// std::cout << "[" << this->totalRequestsCount << "] Client " << clientFd << "'s request:\n";
+	// std::cout << rawRequest << std::endl;
+	// std::cout << "--------------------------" << std::endl;
 
 	Request request(rawRequest);
+	std::cout << request.toString() << std::endl;
 
 	// Keep-Alive handling
 	if (!request.getHeaderValues("connection").empty())
