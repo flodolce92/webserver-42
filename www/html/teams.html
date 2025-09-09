@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teams - Galactik Football</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #ffffff;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+                        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+                        radial-gradient(1px 1px at 90px 40px, #fff, transparent);
+            background-repeat: repeat;
+            background-size: 200px 100px;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        header {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 1rem 0;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid #00d4ff;
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00d4ff;
+            text-shadow: 0 0 10px #00d4ff;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: #00d4ff;
+            text-shadow: 0 0 5px #00d4ff;
+        }
+
+        .page-hero {
+            text-align: center;
+            padding: 3rem 2rem 2rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #00d4ff;
+            text-shadow: 0 0 20px #00d4ff;
+        }
+
+        .page-hero p {
+            font-size: 1.2rem;
+            color: #cccccc;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .teams-grid {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+        }
+
+        .team-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .team-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .team-card.akillian {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        }
+
+        .team-card.shadows {
+            border-color: #8b00ff;
+            box-shadow: 0 0 20px rgba(139, 0, 255, 0.2);
+        }
+
+        .team-card.rykers {
+            border-color: #ff4500;
+            box-shadow: 0 0 20px rgba(255, 69, 0, 0.2);
+        }
+
+        .team-card.wambas {
+            border-color: #32cd32;
+            box-shadow: 0 0 20px rgba(50, 205, 50, 0.2);
+        }
+
+        .team-card.technoid {
+            border-color: #ff1493;
+            box-shadow: 0 0 20px rgba(255, 20, 147, 0.2);
+        }
+
+        .team-card.pirates {
+            border-color: #ffd700;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+        }
+
+        .team-image {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(45deg, #333, #555);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cccccc;
+            font-size: 1.1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .team-image::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+
+        .team-card:hover .team-image::before {
+            transform: translateX(100%);
+        }
+
+        .team-info {
+            padding: 2rem;
+        }
+
+        .team-name {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #ffffff;
+        }
+
+        .akillian .team-name { color: #00d4ff; }
+        .shadows .team-name { color: #8b00ff; }
+        .rykers .team-name { color: #ff4500; }
+        .wambas .team-name { color: #32cd32; }
+        .technoid .team-name { color: #ff1493; }
+        .pirates .team-name { color: #ffd700; }
+
+        .planet {
+            font-size: 1rem;
+            color: #aaaaaa;
+            margin-bottom: 1rem;
+            font-style: italic;
+        }
+
+        .breath-power {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .breath-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .akillian .breath-title { color: #00d4ff; }
+        .shadows .breath-title { color: #8b00ff; }
+        .rykers .breath-title { color: #ff4500; }
+        .wambas .breath-title { color: #32cd32; }
+        .technoid .breath-title { color: #ff1493; }
+        .pirates .breath-title { color: #ffd700; }
+
+        .team-description {
+            color: #cccccc;
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
+
+        .team-stats {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #aaaaaa;
+        }
+
+        footer {
+            background: rgba(0, 0, 0, 0.8);
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+            border-top: 2px solid #00d4ff;
+        }
+
+        @media (max-width: 768px) {
+            .teams-grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .page-hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+
+    <header>
+        <nav>
+            <div class="logo">GALACTIK FOOTBALL</div>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="#teams">Teams</a></li>
+                <li><a href="characters.html">Characters</a></li>
+                <li><a href="upload.html">Test upload</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="page-hero">
+            <h1>GALACTIC TEAMS</h1>
+            <p>Discover the legendary teams that compete across the galaxy, each wielding unique powers from their home worlds.</p>
+        </section>
+
+        <section class="teams-grid">
+            <div class="team-card akillian">
+                <div class="team-image">
+                    <img src="assets/team-snow-kids.jpg" alt="Snow Kids team" style="width:100%; height:100%; object-fit:cover;" />
+                </div>
+                <div class="team-info">
+                    <h3 class="team-name">Snow Kids</h3>
+                    <div class="planet">Planet: Akillian</div>
+                    <div class="breath-power">
+                        <div class="breath-title">Breath of Akillian</div>
+                        <p>Ice and snow-based powers that allow for incredible speed and freezing attacks.</p>
+                    </div>
+                    <p class="team-description">
+                        The heroic team from the ice planet Akillian. Originally considered underdogs, they rose to become galactic champions through determination, teamwork, and mastery of their icy powers.
+                    </p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span class="stat-value">1st</span>
+                            <span class="stat-label">GFC Ranking</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">Ice</span>
+                            <span class="stat-label">Element</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">6</span>
+                            <span class="stat-label">Core Players</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-card shadows">
+                <div class="team-image">
+                    <img src="assets/team-shadows.jpg" alt="Shadows team" style="width:100%; height:100%; object-fit:cover;" />
+                </div>
+                <div class="team-info">
+                    <h3 class="team-name">Shadows</h3>
+                    <div class="planet">Planet: Shiloe</div>
+                    <div class="breath-power">
+                        <div class="breath-title">Breath of Shiloe</div>
+                        <p>Dark energy manipulation and stealth abilities that make them nearly invisible.</p>
+                    </div>
+                    <p class="team-description">
+                        Masters of darkness and stealth from the shadowy planet Shiloe. Known for their mysterious tactics and ability to appear and disappear at will during matches.
+                    </p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span class="stat-value">2nd</span>
+                            <span class="stat-label">GFC Ranking</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">Shadow</span>
+                            <span class="stat-label">Element</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">6</span>
+                            <span class="stat-label">Core Players</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-card rykers">
+                <div class="team-image">
+                    <img src="assets/team-rykers.webp" alt="Rykers team" style="width:100%; height:100%; object-fit:cover;" />
+                </div>
+                <div class="team-info">
+                    <h3 class="team-name">Rykers</h3>
+                    <div class="planet">Planet: Ryker</div>
+                    <div class="breath-power">
+                        <div class="breath-title">Breath of Ryker</div>
+                        <p>Fire and lava-based powers providing explosive offensive capabilities.</p>
+                    </div>
+                    <p class="team-description">
+                        The fierce warriors from the volcanic planet Ryker. Their aggressive playing style matches their fiery breath powers, making them formidable opponents on any field.
+                    </p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span class="stat-value">3rd</span>
+                            <span class="stat-label">GFC Ranking</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">Fire</span>
+                            <span class="stat-label">Element</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">6</span>
+                            <span class="stat-label">Core Players</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-card wambas">
+                <div class="team-image">
+                    <img src="assets/team-wambas.webp" alt="Wambas team" style="width:100%; height:100%; object-fit:cover;" />
+                </div>
+                <div class="team-info">
+                    <h3 class="team-name">Wambas</h3>
+                    <div class="planet">Planet: Wamba</div>
+                    <div class="breath-power">
+                        <div class="breath-title">Breath of Wamba</div>
+                        <p>Nature-based powers allowing control over plants and earth elements.</p>
+                    </div>
+                    <p class="team-description">
+                        The peaceful yet powerful team from the jungle planet Wamba. Their connection to nature gives them unique defensive and healing abilities during matches.
+                    </p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span class="stat-value">4th</span>
+                            <span class="stat-label">GFC Ranking</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">Nature</span>
+                            <span class="stat-label">Element</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">6</span>
+                            <span class="stat-label">Core Players</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-card technoid">
+                <div class="team-image">
+                    <img src="assets/player-harris.webp" alt="Technoid representative - Harris" style="width:100%; height:100%; object-fit:cover;" />
+                </div>
+                <div class="team-info">
+                    <h3 class="team-name">Technoid</h3>
+                    <div class="planet">Planet: Genesis</div>
+                    <div class="breath-power">
+                        <div class="breath-title">Breath of Genesis</div>
+                        <p>Lightning and electrical energy manipulation with technological enhancements.</p>
+                    </div>
+                    <p class="team-description">
+                        The high-tech team from Genesis, combining advanced technology with lightning-based breath powers. Their precision and speed make them incredibly dangerous opponents.
+                    </p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span class="stat-value">5th</span>
+                            <span class="stat-label">GFC Ranking</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">Lightning</span>
+                            <span class="stat-label">Element</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">6</span>
+                            <span class="stat-label">Core Players</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-card pirates">
+                <div class="team-image">
+                    <img src="assets/team-pirates.webp" alt="Pirates team" style="width:100%; height:100%; object-fit:cover;" />
+                </div>
+                <div class="team-info">
+                    <h3 class="team-name">Pirates</h3>
+                    <div class="planet">Planet: Paradisia</div>
+                    <div class="breath-power">
+                        <div class="breath-title">Breath of Paradisia</div>
+                        <p>Wind and storm-based powers providing excellent mobility and unpredictable attacks.</p>
+                    </div>
+                    <p class="team-description">
+                        The swashbuckling team from the oceanic planet Paradisia. Known for their unpredictable tactics and mastery of wind-based breath powers that mimic ocean storms.
+                    </p>
+                    <div class="team-stats">
+                        <div class="stat">
+                            <span class="stat-value">6th</span>
+                            <span class="stat-label">GFC Ranking</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">Wind</span>
+                            <span class="stat-label">Element</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">6</span>
+                            <span class="stat-label">Core Players</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Galactik Football Fan Site. This is a fan-created tribute to the animated series.</p>
+    </footer>
+</body>
+</html>
