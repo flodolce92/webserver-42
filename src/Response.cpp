@@ -43,7 +43,8 @@ Response::Response(
 	}
 
 	// Redirect if requested
-	if (this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY && !(this->_matchedLocation->redirect_url.empty()))
+	if ((this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY || this->_matchedLocation->redirect_code == StatusCodes::MOVED_TEMPORARILY) &&
+	 !(this->_matchedLocation->redirect_url.empty()))
 	{
 		this->handleRedirect();
 		return;
@@ -163,7 +164,14 @@ void Response::handleRedirect()
 
 	oss << "Content-Length: " << this->_body.length() << "\r\n";
 	contentLengthHeader = oss.str();
-	this->_fullResponse = "HTTP/1.1 301 Moved Permanently\r\n" +
+
+	std::string contentHeader;
+	if (this->_matchedLocation->redirect_code == StatusCodes::MOVED_PERMANENTLY)
+		contentHeader = "HTTP/1.1 301 Moved Permanently\r\n";
+	else
+		contentHeader = "HTTP/1.1 302 Moved Temporarily\r\n";
+
+	this->_fullResponse = contentHeader +
 						  contentLengthHeader +
 						  connection +
 						  location +
