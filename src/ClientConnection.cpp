@@ -48,14 +48,6 @@ bool ClientConnection::readData()
 
 	if (bytesRead < 0)
 	{
-		// Error Occured
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-		{
-			// No Data Available at the Moment
-			return true;
-		}
-
-		// Real Error
 		this->setState(CONN_ERROR);
 		return false;
 	}
@@ -185,10 +177,10 @@ bool ClientConnection::hasCompleteRequest() const
 		size_t end = this->_readBuffer.find("\r\n", pos);
 		std::string lenStr = this->_readBuffer.substr(pos + 15, end - (pos + 15));
 		contentLength = atoi(lenStr.c_str());
-		
+
 		// Update the instance variables for use by other methods
-		const_cast<ClientConnection*>(this)->_contentLength = contentLength;
-		const_cast<ClientConnection*>(this)->_hasContentLength = true;
+		const_cast<ClientConnection *>(this)->_contentLength = contentLength;
+		const_cast<ClientConnection *>(this)->_hasContentLength = true;
 	}
 
 	size_t totalLength = headerEnd + 4 + contentLength;
