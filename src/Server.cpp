@@ -394,6 +394,7 @@ void Server::handleClientWrite(int clientFd)
 			client->setState(CONN_READING_REQUEST);
 			FD_CLR(clientFd, &_masterWriteFds); // Stop monitoring for write readiness
 			FD_SET(clientFd, &_masterReadFds);	// Start monitoring for read readiness
+			client->setContentLength(0);
 		}
 	}
 }

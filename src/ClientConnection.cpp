@@ -277,3 +277,8 @@ bool ClientConnection::shouldClose() const
 {
 	return this->_state == CONN_CLOSING;
 }
+
+void ClientConnection::setContentLength(int cl)
+{
+	this->_contentLength = cl;
+}
