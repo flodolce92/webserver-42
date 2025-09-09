@@ -3,19 +3,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>C++98 Web Server - File</title>
+    <title>Galactik Football - The Ultimate Galactic Sport</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f4; color: #333; text-align: center; margin-top: 40px; padding: 20px; }
-        h1 { color: #0056b3; }
-        p { font-size: 1.1em; color: #555; margin: 12px 0; }
-        .container { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        .hidden-by-css { display: none; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #ffffff;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+                        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+                        radial-gradient(1px 1px at 90px 40px, #fff, transparent);
+            background-repeat: repeat;
+            background-size: 200px 100px;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        header {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 1rem 0;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid #00d4ff;
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00d4ff;
+            text-shadow: 0 0 10px #00d4ff;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: #00d4ff;
+            text-shadow: 0 0 5px #00d4ff;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 4rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            color: #00d4ff;
+            text-shadow: 0 0 20px #00d4ff;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00d4ff; }
+            to { text-shadow: 0 0 30px #00d4ff, 0 0 40px #00d4ff; }
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            color: #cccccc;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-image {
+            width: 100%;
+            max-width: 500px;
+            height: 300px;
+            background: linear-gradient(45deg, #333, #555);
+            border: 3px solid #00d4ff;
+            border-radius: 10px;
+            margin: 2rem auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #00d4ff;
+            font-size: 1.2rem;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+        }
+
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 3rem;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+        }
+
+        .card h3 {
+            color: #00d4ff;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .card p {
+            color: #cccccc;
+            line-height: 1.8;
+        }
+
+        .seasons {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 3rem 0;
+            margin-top: 3rem;
+        }
+
+        .seasons-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            text-align: center;
+        }
+
+        .seasons h2 {
+            color: #00d4ff;
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 10px #00d4ff;
+        }
+
+        .season-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .season-card {
+            background: linear-gradient(135deg, #2a2a4e, #1e1e3e);
+            border-radius: 10px;
+            padding: 2rem;
+            border: 2px solid #00d4ff;
+            transition: all 0.3s ease;
+        }
+
+        .season-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .season-card h4 {
+            color: #00d4ff;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        footer {
+            background: rgba(0, 0, 0, 0.8);
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+            border-top: 2px solid #00d4ff;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+
+            .content {
+                grid-template-columns: 1fr;
+                padding: 2rem 1rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Content Loaded from File</h1>
-        <p>This page and its content were loaded from <code>index.html</code> by the C++98 server.</p>
-    </div>
+    <div class="stars"></div>
+
+    <header>
+        <nav>
+            <div class="logo">GALACTIK FOOTBALL</div>
+            <ul class="nav-links">
+                <li><a href="#home">Home</a></li>
+                <li><a href="teams.html">Teams</a></li>
+                <li><a href="characters.html">Characters</a></li>
+                <li><a href="upload.html">Test upload</a></li>
+                <li><a href="cgi-bin/test.py">Test CGI</a></li>
+                <li><a href="uploads/">Uploads</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>GALACTIK FOOTBALL</h1>
+            <p>Experience the ultimate sport across the galaxy where teams from different planets compete using The Breath - mystical powers unique to each world.</p>
+            <div class="hero-image">
+                <img src="assets/hero.webp" alt="Galactik Football Hero" style="width:100%; height:100%; object-fit:cover; border-radius:7px;" />
+            </div>
+        </section>
+
+        <section class="content">
+            <div class="card">
+                <h3>The Universe</h3>
+                <p>In the distant future, football has evolved into the galaxy's most popular sport. Teams from across the universe compete in the prestigious Galactik Football Cup, each wielding The Breath - supernatural powers connected to their home planet's essence.</p>
+            </div>
+
+            <div class="card">
+                <h3>The Snow Kids</h3>
+                <p>Follow the journey of Akillian's team, the Snow Kids, as they rise from underdogs to galactic champions. Led by the talented D'Jok and guided by coach Aarch, they must master the Breath of Akillian to compete against the galaxy's elite teams.</p>
+            </div>
+
+            <div class="card">
+                <h3>The Breath</h3>
+                <p>Each planet possesses a unique form of The Breath that grants special abilities during matches. From Akillian's ice powers to Genesis's lightning, these mystical forces transform football into an spectacular cosmic sport unlike anything seen before.</p>
+            </div>
+        </section>
+
+        <section class="seasons">
+            <div class="seasons-content">
+                <h2>Three Epic Seasons</h2>
+                <div class="season-grid">
+                    <div class="season-card">
+                        <h4>Season 1: The Awakening</h4>
+                        <p>The Snow Kids discover their powers and compete in their first Galactik Football Cup, facing formidable opponents and uncovering ancient secrets.</p>
+                    </div>
+                    <div class="season-card">
+                        <h4>Season 2: The Revenge</h4>
+                        <p>With new challenges and enemies, the Snow Kids must defend their title while dealing with the mysterious corruption affecting The Breath across the galaxy.</p>
+                    </div>
+                    <div class="season-card">
+                        <h4>Season 3: Revolution</h4>
+                        <p>The final season brings revelations about the true nature of The Breath and the ultimate test for our heroes as they face their greatest challenge yet.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Galactik Football Fan Site. This is a fan-created tribute to the animated series.</p>
+    </footer>
 </body>
 </html>

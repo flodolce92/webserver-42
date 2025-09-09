@@ -394,6 +394,7 @@ void Server::handleClientWrite(int clientFd)
 			client->setState(CONN_READING_REQUEST);
 			FD_CLR(clientFd, &_masterWriteFds); // Stop monitoring for write readiness
 			FD_SET(clientFd, &_masterReadFds);	// Start monitoring for read readiness
+			client->setContentLength(0);
 		}
 	}
 }
@@ -559,13 +560,14 @@ void Server::processRequest(int clientFd, const std::string &rawRequest)
 	struct tm *timeInfo = localtime(&now);
 	strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
 
-	std::cout << "\n\n--------------------------" << std::endl;
-	std::cout << "Current time: " << timeBuffer << std::endl;
-	std::cout << "[" << this->totalRequestsCount << "] Client " << clientFd << "'s request:\n";
-	std::cout << rawRequest << std::endl;
-	std::cout << "--------------------------" << std::endl;
+	// std::cout << "\n\n--------------------------" << std::endl;
+	// std::cout << "Current time: " << timeBuffer << std::endl;
+	// std::cout << "[" << this->totalRequestsCount << "] Client " << clientFd << "'s request:\n";
+	// std::cout << rawRequest << std::endl;
+	// std::cout << "--------------------------" << std::endl;
 
 	Request request(rawRequest);
+	std::cout << request.toString() << std::endl;
 
 	// Keep-Alive handling
 	if (!request.getHeaderValues("connection").empty())

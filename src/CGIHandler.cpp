@@ -5,6 +5,10 @@
 #include <sstream>
 #include <cstdlib>
 #include <errno.h>
+#include <ctime>
+
+// Timeout for the CGI process in seconds
+#define CGI_TIMEOUT 5
 
 CGIHandler::CGIHandler() {}
 
@@ -117,7 +121,6 @@ std::string CGIHandler::executeCGI(const std::string &scriptPath,
 
 	// Prepare the environment variables for execve
 	char **envp = mapToCharPtrArray(envVars);
-
 	pid_t pid = fork();
 
 	if (pid == -1)
@@ -145,14 +148,43 @@ std::string CGIHandler::executeCGI(const std::string &scriptPath,
 		// Write the request body to the stdin of the child process
 		writeToPipe(pipe_in[1], requestBody);
 
+		int status;
+		time_t startTime = time(NULL);
+
+		while (true)
+		{
+			// Check if the child process has terminated
+			pid_t wait_result = waitpid(pid, &status, WNOHANG);
+			if (wait_result == pid)
+			{
+				break;
+			}
+			if (wait_result == -1)
+			{
+				std::cerr << "waitpid error: " << strerror(errno) << std::endl;
+				close(pipe_in[1]);
+				close(pipe_out[0]);
+				return "";
+			}
+
+			// Check for timeout
+			time_t currentTime = time(NULL);
+			if (difftime(currentTime, startTime) >= CGI_TIMEOUT)
+			{
+				std::cerr << "CGI script timed out" << std::endl;
+				kill(pid, SIGKILL);
+				waitpid(pid, NULL, 0);
+				close(pipe_in[1]);
+				close(pipe_out[0]);
+				return "Status: 504 Gateway Timeout\r\n\r\n";
+			}
+		}
+
 		// Read the output from the stdout of the child process
 		std::string cgiOutput = readFromPipe(pipe_out[0]);
+
 		close(pipe_out[0]);
-
-		// Wait for the child process to finish
-		int status;
-		waitpid(pid, &status, 0);
-
+		
 		// Free the environment variables and script path
 		freeCharPtrArray(envp);
 		free(argv[0]);

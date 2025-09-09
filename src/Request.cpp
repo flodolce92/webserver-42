@@ -229,8 +229,8 @@ std::string Request::toString() const
 	oss << "\r\n";
 
 	// Body (if present)
-	if (!_body.empty())
-		oss << _body;
+	// if (!_body.empty())
+	// 	oss << _body;
 
 	return oss.str();
 }

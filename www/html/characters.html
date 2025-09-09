@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Characters - Galactik Football</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #ffffff;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+                        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+                        radial-gradient(1px 1px at 90px 40px, #fff, transparent);
+            background-repeat: repeat;
+            background-size: 200px 100px;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        header {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 1rem 0;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid #00d4ff;
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00d4ff;
+            text-shadow: 0 0 10px #00d4ff;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: #00d4ff;
+            text-shadow: 0 0 5px #00d4ff;
+        }
+
+        .page-hero {
+            text-align: center;
+            padding: 3rem 2rem 2rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #00d4ff;
+            text-shadow: 0 0 20px #00d4ff;
+        }
+
+        .page-hero p {
+            font-size: 1.2rem;
+            color: #cccccc;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .characters-section {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            color: #00d4ff;
+            text-align: center;
+            margin-bottom: 3rem;
+            text-shadow: 0 0 15px #00d4ff;
+        }
+
+        .characters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .character-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(0, 212, 255, 0.3);
+            transition: all 0.4s ease;
+            position: relative;
+        }
+
+        .character-card:hover {
+            transform: translateY(-15px) scale(1.02);
+            box-shadow: 0 20px 50px rgba(0, 212, 255, 0.3);
+            border-color: #00d4ff;
+        }
+
+        .character-image {
+            width: 100%;
+            height: 280px;
+            background: linear-gradient(45deg, #333, #555);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cccccc;
+            font-size: 1.1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .character-image::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(0, 212, 255, 0.2), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.8s;
+        }
+
+        .character-card:hover .character-image::before {
+            transform: translateX(100%);
+        }
+
+        .character-info {
+            padding: 2rem;
+        }
+
+        .character-name {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #00d4ff;
+        }
+
+        .character-role {
+            color: #aaaaaa;
+            font-style: italic;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .character-description {
+            color: #cccccc;
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+
+        .character-traits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .trait {
+            background: rgba(0, 212, 255, 0.2);
+            color: #00d4ff;
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            border: 1px solid rgba(0, 212, 255, 0.4);
+        }
+
+        .character-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #00d4ff;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #aaaaaa;
+            margin-top: 0.2rem;
+        }
+
+        .villains-section {
+            background: rgba(139, 0, 255, 0.1);
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            margin-top: 3rem;
+        }
+
+        .villains-section .section-title {
+            color: #8b00ff;
+            text-shadow: 0 0 15px #8b00ff;
+        }
+
+        .villains-section .character-card {
+            border-color: rgba(139, 0, 255, 0.3);
+        }
+
+        .villains-section .character-card:hover {
+            border-color: #8b00ff;
+            box-shadow: 0 20px 50px rgba(139, 0, 255, 0.3);
+        }
+
+        .villains-section .character-name {
+            color: #8b00ff;
+        }
+
+        .villains-section .trait {
+            background: rgba(139, 0, 255, 0.2);
+            color: #8b00ff;
+            border-color: rgba(139, 0, 255, 0.4);
+        }
+
+        .villains-section .stat-value {
+            color: #8b00ff;
+        }
+
+        .villains-section .character-image::before {
+            background: linear-gradient(45deg, transparent, rgba(139, 0, 255, 0.2), transparent);
+        }
+
+        footer {
+            background: rgba(0, 0, 0, 0.8);
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+            border-top: 2px solid #00d4ff;
+        }
+
+        @media (max-width: 768px) {
+            .characters-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .page-hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+
+            .characters-section {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+
+    <header>
+        <nav>
+            <div class="logo">GALACTIK FOOTBALL</div>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="teams.html">Teams</a></li>
+                <li><a href="#characters">Characters</a></li>
+                <li><a href="upload.html">Test upload</a></li>
+                <li><a href="cgi-bin/test.py">Test CGI</a></li>
+                <li><a href="uploads/">Uploads</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="page-hero">
+            <h1>HEROES & LEGENDS</h1>
+            <p>Meet the extraordinary characters who define the galaxy's greatest sport, each with unique abilities and compelling stories.</p>
+        </section>
+
+        <section class="characters-section">
+            <h2 class="section-title">Snow Kids Heroes</h2>
+            <div class="characters-grid">
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-djok.webp" alt="D'Jok portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">D'Jok</h3>
+                        <div class="character-role">Striker & Team Captain</div>
+                        <p class="character-description">
+                            The talented and sometimes arrogant striker who becomes the heart of the Snow Kids. His journey from selfish player to true team leader defines much of the series' emotional core.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Natural Leader</span>
+                            <span class="trait">Goal Scorer</span>
+                            <span class="trait">Ice Master</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">95</span>
+                                <span class="stat-label">SHOOTING</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">88</span>
+                                <span class="stat-label">BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">92</span>
+                                <span class="stat-label">LEADERSHIP</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-micro-ice.webp" alt="Micro-Ice portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Micro-Ice</h3>
+                        <div class="character-role">Defender & Comic Relief</div>
+                        <p class="character-description">
+                            The loyal defender and D'Jok's best friend. Known for his humor and unwavering loyalty, Micro-Ice provides both defensive strength and team morale throughout their adventures.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Loyal Friend</span>
+                            <span class="trait">Strong Defense</span>
+                            <span class="trait">Team Spirit</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">90</span>
+                                <span class="stat-label">DEFENSE</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">75</span>
+                                <span class="stat-label">BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">95</span>
+                                <span class="stat-label">LOYALTY</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-ahito.webp" alt="Ahito portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Ahito</h3>
+                        <div class="character-role">Goalkeeper & Guardian</div>
+                        <p class="character-description">
+                            The mysterious and powerful goalkeeper whose connection to The Breath runs deeper than anyone realizes. His calm demeanor hides incredible strength and ancient knowledge.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Mysterious Past</span>
+                            <span class="trait">Breath Master</span>
+                            <span class="trait">Guardian</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">98</span>
+                                <span class="stat-label">GOALKEEPING</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">95</span>
+                                <span class="stat-label">BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">85</span>
+                                <span class="stat-label">WISDOM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-tia.webp" alt="Tia portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Tia</h3>
+                        <div class="character-role">Midfielder & Strategist</div>
+                        <p class="character-description">
+                            The intelligent and determined midfielder who often serves as the team's strategic mind. Her relationship with D'Jok adds emotional depth to the series.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Strategist</span>
+                            <span class="trait">Team Player</span>
+                            <span class="trait">Determined</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">85</span>
+                                <span class="stat-label">PASSING</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">80</span>
+                                <span class="stat-label">BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">90</span>
+                                <span class="stat-label">STRATEGY</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-rocket.webp" alt="Rocket portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Rocket</h3>
+                        <div class="character-role">Winger & Speed Demon</div>
+                        <p class="character-description">
+                            The fastest player on the team, Rocket's incredible speed and agility make him perfect for wing play. His enthusiasm and energy are infectious to the entire squad.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Lightning Fast</span>
+                            <span class="trait">Energetic</span>
+                            <span class="trait">Wing Master</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">98</span>
+                                <span class="stat-label">SPEED</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">82</span>
+                                <span class="stat-label">BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">88</span>
+                                <span class="stat-label">AGILITY</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-aarch.jpeg" alt="Aarch portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Aarch</h3>
+                        <div class="character-role">Coach & Mentor</div>
+                        <p class="character-description">
+                            The wise and experienced coach of the Snow Kids. A former Galactik Football player himself, Aarch guides the team with patience, wisdom, and deep understanding of The Breath.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Experienced</span>
+                            <span class="trait">Wise Mentor</span>
+                            <span class="trait">Former Player</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">95</span>
+                                <span class="stat-label">COACHING</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">88</span>
+                                <span class="stat-label">EXPERIENCE</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">92</span>
+                                <span class="stat-label">WISDOM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="characters-section villains-section">
+            <h2 class="section-title">Rivals & Antagonists</h2>
+            <div class="characters-grid">
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-sinedd.webp" alt="Sinedd portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Sinedd</h3>
+                        <div class="character-role">Shadows Striker & Rival</div>
+                        <p class="character-description">
+                            D'Jok's primary rival and the star player of the Shadows. His dark powers and mysterious past make him one of the most formidable opponents in the galaxy.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Dark Powers</span>
+                            <span class="trait">Mysterious</span>
+                            <span class="trait">Rival</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">93</span>
+                                <span class="stat-label">SHOOTING</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">90</span>
+                                <span class="stat-label">BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">85</span>
+                                <span class="stat-label">DARKNESS</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-harris.webp" alt="Harris portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Harris</h3>
+                        <div class="character-role">Technoid Captain & Perfectionist</div>
+                        <p class="character-description">
+                            The calculating and precise captain of the Technoid team. His mastery of technology combined with lightning breath makes him a fearsome strategist and player.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Perfectionist</span>
+                            <span class="trait">Tech Master</span>
+                            <span class="trait">Strategic Mind</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">88</span>
+                                <span class="stat-label">PRECISION</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">92</span>
+                                <span class="stat-label">TECHNOLOGY</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">90</span>
+                                <span class="stat-label">TACTICS</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="character-card">
+                    <div class="character-image">
+                        <img src="assets/player-bleylock.webp" alt="Bleylock portrait" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                    <div class="character-info">
+                        <h3 class="character-name">Bleylock</h3>
+                        <div class="character-role">Rykers Captain & Fire Warrior</div>
+                        <p class="character-description">
+                            The fierce and aggressive captain of the Rykers team. His mastery of fire-based breath and warrior mentality make him one of the most intimidating players in the league.
+                        </p>
+                        <div class="character-traits">
+                            <span class="trait">Fire Master</span>
+                            <span class="trait">Aggressive</span>
+                            <span class="trait">Warrior Spirit</span>
+                        </div>
+                        <div class="character-stats">
+                            <div class="stat">
+                                <span class="stat-value">90</span>
+                                <span class="stat-label">POWER</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">95</span>
+                                <span class="stat-label">FIRE BREATH</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">88</span>
+                                <span class="stat-label">AGGRESSION</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Galactik Football Fan Site. This is a fan-created tribute to the animated series.</p>
+    </footer>
+</body>
+</html>
