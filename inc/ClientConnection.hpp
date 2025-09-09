@@ -85,6 +85,9 @@ public:
 	void incrementRequestCount();
 	size_t getContentLength() const;
 
+	// Setters
+	void setContentLength(int cl);
+
 	// Helper Methods for Server Class
 	bool needsRead() const;
 	bool needsWrite() const;
