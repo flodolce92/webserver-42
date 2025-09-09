@@ -174,6 +174,17 @@ void Response::handleRedirect()
 
 void Response::handleCGI()
 {
+	if (this->_request.getHeaderValues("content-length").size() > 0)
+	{
+		size_t bodySize = ft_stoi(this->_request.getHeaderValues("content-length")[0]);
+		if (bodySize > this->_server->client_max_body_size)
+		{
+			this->setErrorFilePathForStatus(StatusCodes::PAYLOAD_TOO_LARGE);
+			this->buildResponseContent();
+			return;
+		}
+	}
+
 	std::map<std::string, std::string> env_var = this->_request.getHeaders();
 	env_var["path_info"] = this->_filePath.substr(0, this->_filePath.find_last_of('/') + 1);
 	env_var["script_filename"] = this->_filePath;
@@ -194,6 +205,17 @@ void Response::handleGet()
 
 void Response::handlePost()
 {
+	if (this->_request.getHeaderValues("content-length").size() > 0)
+	{
+		size_t bodySize = ft_stoi(this->_request.getHeaderValues("content-length")[0]);
+		if (bodySize > this->_server->client_max_body_size)
+		{
+			this->setErrorFilePathForStatus(StatusCodes::PAYLOAD_TOO_LARGE);
+			this->buildResponseContent();
+			return;
+		}
+	}
+
 	if (this->_request.getHeaders().count("content-type") &&
 		this->_request.getHeaders().at("content-type").find("multipart/form-data") != std::string::npos)
 	{
@@ -291,9 +313,10 @@ void Response::readFileError()
 {
 	struct stat fileInfo;
 
-	if (this->_status == StatusCodes::CREATED) {
+	if (this->_status == StatusCodes::CREATED)
+	{
 		this->_body = this->generateDynamicErrorPageBody();
-		return ;
+		return;
 	}
 
 	if (stat(this->_filePath.c_str(), &fileInfo) == -1)
