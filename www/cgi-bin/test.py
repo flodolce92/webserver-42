@@ -3,6 +3,10 @@
 import os
 import sys
 from urllib.parse import parse_qs
+# import time
+
+# while True:
+# 	time.sleep(5)
 
 print("""
 <!DOCTYPE html>

@@ -414,7 +414,6 @@ void Server::cleanupTimedOutClients()
 
 	for (size_t i = 0; i < timedOutClients.size(); ++i)
 	{
-		std::cout << "Client " << timedOutClients[i] << " timed out." << std::endl;
 		markClientForRemoval(timedOutClients[i]);
 	}
 }
@@ -437,7 +436,6 @@ void Server::removeClient(int clientFd)
 	FD_CLR(clientFd, &_masterWriteFds);
 	FD_CLR(clientFd, &_exceptFds); // Also clear from except set if used
 
-	std::cout << "Closing client connection: " << clientFd << std::endl;
 	delete it->second;		  // Delete the ClientConnection object
 	this->_clients.erase(it); // Remove from map
 	close(clientFd);		  // Close the socket FD
